@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Full Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-gray-800">Admin Control Panel</h1>
+                <p class="text-sm text-gray-500">Full system management</p>
+            </div>
+            <button onclick="logout()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Tabs -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex space-x-8">
+                <button onclick="switchTab('users')" id="tab-users" class="tab-btn border-b-2 border-indigo-600 text-indigo-600 py-4 px-1 font-medium text-sm">
+                    Users Management
+                </button>
+                <button onclick="switchTab('roles')" id="tab-roles" class="tab-btn border-b-2 border-transparent text-gray-500 hover:text-gray-700 py-4 px-1 font-medium text-sm">
+                    Roles
+                </button>
+                <button onclick="switchTab('permissions')" id="tab-permissions" class="tab-btn border-b-2 border-transparent text-gray-500 hover:text-gray-700 py-4 px-1 font-medium text-sm">
+                    Permissions
+                </button>
+            </nav>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="content-users" class="tab-content">
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">All Users</h2>
+                    <button onclick="openCreateUserModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+                        + Create User
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody" class="divide-y divide-gray-200">
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Roles Tab -->
+        <div id="content-roles" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Roles Management</h2>
+                    <button onclick="openCreateRoleModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+                        + Create Role
+                    </button>
+                </div>
+                <div id="roles-list" class="space-y-3">
+                    <div class="animate-pulse text-center text-gray-500 py-8">Loading roles...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Permissions Tab -->
+        <div id="content-permissions" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Permissions Management</h2>
+                    <button onclick="openCreatePermissionModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+                        + Create Permission
+                    </button>
+                </div>
+                <div id="permissions-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="col-span-full text-center text-gray-500 py-8">Loading permissions...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit User Modal -->
+    <div id="user-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4">
+            <h3 id="user-modal-title" class="text-xl font-bold text-gray-800 mb-4">Create User</h3>
+            <form id="user-form" class="space-y-4">
+                <input type="hidden" id="user-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                    <input type="email" id="user-email" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                    <input type="tel" id="user-phone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Password *</label>
+                    <input type="password" id="user-password" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+                    <select id="user-role" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="">Select a role...</option>
+                    </select>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="user-locked" class="mr-2">
+                    <label for="user-locked" class="text-sm font-medium text-gray-700">Account Locked</label>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeUserModal()" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                    <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Role Modal -->
+    <div id="role-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4 max-h-screen overflow-y-auto">
+            <h3 id="role-modal-title" class="text-xl font-bold text-gray-800 mb-4">Create Role</h3>
+            <form id="role-form" class="space-y-4">
+                <input type="hidden" id="role-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Role Name *</label>
+                    <input type="text" id="role-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <textarea id="role-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
+                    <div id="role-permissions-list" class="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                        <div class="text-sm text-gray-500">Loading permissions...</div>
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeRoleModal()" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                    <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Permission Modal -->
+    <div id="permission-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Create Permission</h3>
+            <form id="permission-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Permission Name *</label>
+                    <input type="text" id="permission-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <textarea id="permission-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closePermissionModal()" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                    <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // Check for OAuth2 redirect with token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        if (urlToken) {
+            localStorage.setItem('jwt_token', urlToken);
+            localStorage.setItem('user_id', urlParams.get('userId'));
+            localStorage.setItem('user_email', urlParams.get('email'));
+            localStorage.setItem('user_role', urlParams.get('role'));
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const token = localStorage.getItem('jwt_token');
+        let allRoles = [];
+        let allPermissions = [];
+
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-indigo-600', 'text-indigo-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+            
+            document.getElementById(`tab-${tab}`).classList.remove('border-transparent', 'text-gray-500');
+            document.getElementById(`tab-${tab}`).classList.add('border-indigo-600', 'text-indigo-600');
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+
+            if (tab === 'roles') loadRoles();
+            if (tab === 'permissions') loadPermissions();
+        }
+
+        // Users Management
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.status === 401) return logout();
+                if (response.ok) {
+                    const users = await response.json();
+                    displayUsers(users);
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        function displayUsers(users) {
+            const tbody = document.getElementById('users-tbody');
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No users found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = users.map(user => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-sm text-gray-900">${user.id}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${user.email}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${user.phone || '-'}</td>
+                    <td class="px-4 py-3 text-sm"><span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">${user.role ? user.role.name : 'N/A'}</span></td>
+                    <td class="px-4 py-3 text-sm">${user.isLocked ? '<span class="text-red-600">🔒 Locked</span>' : '<span class="text-green-600">✓ Active</span>'}</td>
+                    <td class="px-4 py-3 text-sm space-x-2">
+                        <button onclick="editUser(${user.id})" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">Edit</button>
+                        <button onclick="deleteUser(${user.id})" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openCreateUserModal() {
+            document.getElementById('user-modal-title').textContent = 'Create User';
+            document.getElementById('user-form').reset();
+            document.getElementById('user-id').value = '';
+            loadRolesDropdown();
+            document.getElementById('user-modal').classList.remove('hidden');
+        }
+
+        async function editUser(userId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const user = await response.json();
+                    document.getElementById('user-modal-title').textContent = 'Edit User';
+                    document.getElementById('user-id').value = user.id;
+                    document.getElementById('user-email').value = user.email;
+                    document.getElementById('user-phone').value = user.phone || '';
+                    document.getElementById('user-password').value = '';
+                    document.getElementById('user-password').required = false;
+                    document.getElementById('user-locked').checked = user.isLocked;
+                    await loadRolesDropdown();
+                    document.getElementById('user-role').value = user.role ? user.role.id : '';
+                    document.getElementById('user-modal').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    alert('User deleted successfully');
+                    loadUsers();
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+            }
+        }
+
+        function closeUserModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+            document.getElementById('user-password').required = true;
+        }
+
+        document.getElementById('user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('user-id').value;
+            const userData = {
+                email: document.getElementById('user-email').value,
+                phone: document.getElementById('user-phone').value,
+                password: document.getElementById('user-password').value,
+                roleId: parseInt(document.getElementById('user-role').value),
+                isLocked: document.getElementById('user-locked').checked
+            };
+
+            try {
+                const url = userId ? `${API_BASE}/api/admin/users/${userId}` : `${API_BASE}/api/admin/users`;
+                const method = userId ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                if (response.ok) {
+                    alert(userId ? 'User updated successfully' : 'User created successfully');
+                    closeUserModal();
+                    loadUsers();
+                } else {
+                    const data = await response.json();
+                    alert(data.message || 'Operation failed');
+                }
+            } catch (error) {
+                alert('Error saving user');
+            }
+        });
+
+        async function loadRolesDropdown() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const roles = await response.json();
+                    const select = document.getElementById('user-role');
+                    select.innerHTML = '<option value="">Select a role...</option>' + 
+                        roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error loading roles:', error);
+            }
+        }
+
+        // Roles Management
+        async function loadRoles() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    allRoles = await response.json();
+                    displayRoles(allRoles);
+                }
+            } catch (error) {
+                console.error('Error loading roles:', error);
+            }
+        }
+
+        function displayRoles(roles) {
+            const container = document.getElementById('roles-list');
+            if (roles.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-8">No roles found</div>';
+                return;
+            }
+            container.innerHTML = roles.map(role => `
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h4 class="font-semibold text-gray-800">${role.name}</h4>
+                            <p class="text-sm text-gray-600 mt-1">${role.description || 'No description'}</p>
+                            <div class="mt-2">
+                                <span class="text-xs text-gray-500">Permissions: </span>
+                                ${role.permissions && role.permissions.length > 0 ? 
+                                    role.permissions.map(p => `<span class="inline-block px-2 py-1 bg-green-100 text-green-800 rounded text-xs mr-1 mt-1">${p.name}</span>`).join('') :
+                                    '<span class="text-xs text-gray-400">None</span>'}
+                            </div>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            <button onclick="editRole(${role.id})" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">Edit</button>
+                            <button onclick="deleteRole(${role.id})" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openCreateRoleModal() {
+            document.getElementById('role-modal-title').textContent = 'Create Role';
+            document.getElementById('role-form').reset();
+            document.getElementById('role-id').value = '';
+            loadPermissionsForRole([]);
+            document.getElementById('role-modal').classList.remove('hidden');
+        }
+
+        async function editRole(roleId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles/${roleId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const role = await response.json();
+                    document.getElementById('role-modal-title').textContent = 'Edit Role';
+                    document.getElementById('role-id').value = role.id;
+                    document.getElementById('role-name').value = role.name;
+                    document.getElementById('role-description').value = role.description || '';
+                    loadPermissionsForRole(role.permissions || []);
+                    document.getElementById('role-modal').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error loading role:', error);
+            }
+        }
+
+        async function deleteRole(roleId) {
+            if (!confirm('Are you sure you want to delete this role?')) return;
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles/${roleId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    alert('Role deleted successfully');
+                    loadRoles();
+                }
+            } catch (error) {
+                alert('Error deleting role');
+            }
+        }
+
+        function closeRoleModal() {
+            document.getElementById('role-modal').classList.add('hidden');
+        }
+
+        async function loadPermissionsForRole(selectedPermissions) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/permissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const permissions = await response.json();
+                    const container = document.getElementById('role-permissions-list');
+                    const selectedIds = selectedPermissions.map(p => p.id);
+                    container.innerHTML = permissions.map(p => `
+                        <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                            <input type="checkbox" name="permissions" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''} class="rounded">
+                            <span class="text-sm">${p.name}</span>
+                        </label>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading permissions:', error);
+            }
+        }
+
+        document.getElementById('role-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const roleId = document.getElementById('role-id').value;
+            const selectedPerms = Array.from(document.querySelectorAll('input[name="permissions"]:checked')).map(cb => parseInt(cb.value));
+            
+            const roleData = {
+                name: document.getElementById('role-name').value,
+                description: document.getElementById('role-description').value,
+                permissionIds: selectedPerms
+            };
+
+            try {
+                const url = roleId ? `${API_BASE}/api/admin/roles/${roleId}` : `${API_BASE}/api/admin/roles`;
+                const method = roleId ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(roleData)
+                });
+
+                if (response.ok) {
+                    alert(roleId ? 'Role updated successfully' : 'Role created successfully');
+                    closeRoleModal();
+                    loadRoles();
+                } else {
+                    const data = await response.json();
+                    alert(data.message || 'Operation failed');
+                }
+            } catch (error) {
+                alert('Error saving role');
+            }
+        });
+
+        // Permissions Management
+        async function loadPermissions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/permissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    allPermissions = await response.json();
+                    displayPermissions(allPermissions);
+                }
+            } catch (error) {
+                console.error('Error loading permissions:', error);
+            }
+        }
+
+        function displayPermissions(permissions) {
+            const container = document.getElementById('permissions-list');
+            if (permissions.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No permissions found</div>';
+                return;
+            }
+            container.innerHTML = permissions.map(perm => `
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-semibold text-gray-800 text-sm">${perm.name}</h4>
+                            <p class="text-xs text-gray-600 mt-1">${perm.description || 'No description'}</p>
+                        </div>
+                        <button onclick="deletePermission(${perm.id})" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openCreatePermissionModal() {
+            document.getElementById('permission-form').reset();
+            document.getElementById('permission-modal').classList.remove('hidden');
+        }
+
+        function closePermissionModal() {
+            document.getElementById('permission-modal').classList.add('hidden');
+        }
+
+        async function deletePermission(permId) {
+            if (!confirm('Are you sure you want to delete this permission?')) return;
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/permissions/${permId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    alert('Permission deleted successfully');
+                    loadPermissions();
+                }
+            } catch (error) {
+                alert('Error deleting permission');
+            }
+        }
+
+        document.getElementById('permission-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const permData = {
+                name: document.getElementById('permission-name').value,
+                description: document.getElementById('permission-description').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/permissions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(permData)
+                });
+
+                if (response.ok) {
+                    alert('Permission created successfully');
+                    closePermissionModal();
+                    loadPermissions();
+                } else {
+                    const data = await response.json();
+                    alert(data.message || 'Operation failed');
+                }
+            } catch (error) {
+                alert('Error creating permission');
+            }
+        });
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        // Initial load
+        loadUsers();
+    </script>
+</body>
+</html>

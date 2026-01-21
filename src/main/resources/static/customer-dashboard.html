@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-semibold text-gray-800">Customer Portal</h1>
+            <button onclick="logout()" class="text-sm text-red-600 hover:text-red-800 font-medium">Logout</button>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto mt-10 px-4">
+        <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+            <!-- Profile Header -->
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-12 text-white">
+                <div class="flex items-center space-x-6">
+                    <div id="profile-pic-container" class="w-24 h-24 bg-white rounded-full flex items-center justify-center text-indigo-600 text-3xl font-bold shadow-lg">
+                        ?
+                    </div>
+                    <div>
+                        <h2 id="user-name" class="text-3xl font-bold mb-2">Loading...</h2>
+                        <p id="user-email" class="text-indigo-100 text-lg">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Details -->
+            <div class="px-8 py-6 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-2">Email Address</p>
+                        <p id="detail-email" class="text-gray-800 font-medium">-</p>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-2">Phone Number</p>
+                        <p id="detail-phone" class="text-gray-800 font-medium">-</p>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-2">Account Type</p>
+                        <p id="detail-role" class="text-gray-800 font-medium">-</p>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-2">Email Verified</p>
+                        <p id="detail-verified" class="text-gray-800 font-medium">-</p>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-2">Auth Provider</p>
+                        <p id="detail-provider" class="text-gray-800 font-medium">-</p>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-2">Account Status</p>
+                        <p id="detail-status" class="text-gray-800 font-medium">-</p>
+                    </div>
+                </div>
+
+                <div class="text-center pt-6 border-t">
+                    <p class="text-gray-500 text-sm">For account assistance, please contact your plant manager</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // Check for OAuth2 redirect with token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        const urlUserId = urlParams.get('userId');
+        const urlEmail = urlParams.get('email');
+        const urlRole = urlParams.get('role');
+
+        if (urlToken) {
+            // Store OAuth2 credentials
+            localStorage.setItem('jwt_token', urlToken);
+            localStorage.setItem('user_id', urlUserId);
+            localStorage.setItem('user_email', urlEmail);
+            localStorage.setItem('user_role', urlRole);
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const token = localStorage.getItem('jwt_token');
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        async function loadUserProfile() {
+            try {
+                const response = await fetch(`${API_BASE}/api/user/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (response.ok) {
+                    const user = await response.json();
+                    displayUserInfo(user);
+                } else {
+                    alert('Failed to load profile');
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        function displayUserInfo(user) {
+            // Set name and initials
+            const name = user.email.split('@')[0];
+            const initials = name.substring(0, 2).toUpperCase();
+            
+            document.getElementById('user-name').textContent = name.charAt(0).toUpperCase() + name.slice(1);
+            document.getElementById('user-email').textContent = user.email;
+            document.getElementById('profile-pic-container').textContent = initials;
+
+            // Set details
+            document.getElementById('detail-email').textContent = user.email;
+            document.getElementById('detail-phone').textContent = user.phone || 'Not provided';
+            document.getElementById('detail-role').textContent = user.role ? user.role.name : 'Customer';
+            document.getElementById('detail-verified').textContent = user.emailVerified ? '✓ Verified' : '✗ Not verified';
+            document.getElementById('detail-provider').textContent = user.provider || 'Local';
+            document.getElementById('detail-status').textContent = user.isLocked ? '🔒 Locked' : '✓ Active';
+
+            // Set profile image if available
+            if (user.imageUrl) {
+                const picContainer = document.getElementById('profile-pic-container');
+                picContainer.innerHTML = `<img src="${user.imageUrl}" alt="Profile" class="w-full h-full rounded-full object-cover">`;
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        // Load profile on page load
+        loadUserProfile();
+    </script>
+</body>
+</html>

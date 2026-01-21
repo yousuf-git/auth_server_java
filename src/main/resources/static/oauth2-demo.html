@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 Login Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .login-section {
+            margin-bottom: 30px;
+        }
+        
+        .login-section h2 {
+            color: #444;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .google-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: #4285f4;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+        
+        .google-btn:hover {
+            background: #357ae8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 133, 244, 0.4);
+        }
+        
+        .google-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 30px 0;
+            color: #999;
+        }
+        
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .divider span {
+            padding: 0 15px;
+            font-size: 14px;
+        }
+        
+        .local-login {
+            text-align: center;
+        }
+        
+        .local-login a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        .local-login a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+        
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .info-box h3 {
+            color: #667eea;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .info-box ul {
+            list-style: none;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .info-box li {
+            padding: 5px 0;
+        }
+        
+        .info-box li::before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .user-info {
+            display: none;
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .user-info.show {
+            display: block;
+        }
+        
+        .user-info h3 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        
+        .user-info p {
+            color: #555;
+            margin: 5px 0;
+        }
+        
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .logout-btn:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Authentication Demo</h1>
+        <p class="subtitle">Spring Boot + OAuth2 + JWT</p>
+        
+        <div class="login-section">
+            <h2>Sign in with Google</h2>
+            <a href="/oauth2/authorize/google" class="google-btn">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continue with Google
+            </a>
+        </div>
+        
+        <div class="divider">
+            <span>OR</span>
+        </div>
+        
+        <div class="local-login">
+            <p>Already have a local account?</p>
+            <a href="/swagger-ui.html">Sign in with Username/Password →</a>
+        </div>
+        
+        <div class="user-info" id="userInfo">
+            <h3>✅ Login Successful!</h3>
+            <p><strong>User ID:</strong> <span id="userId"></span></p>
+            <p><strong>Username:</strong> <span id="username"></span></p>
+            <p><strong>Email:</strong> <span id="email"></span></p>
+            <p><strong>JWT Token:</strong> <span id="token" style="font-size: 12px; word-break: break-all;"></span></p>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="info-box">
+            <h3>How it works:</h3>
+            <ul>
+                <li>Click "Continue with Google"</li>
+                <li>Sign in with your Google account</li>
+                <li>Grant permissions for email and profile</li>
+                <li>Receive JWT token automatically</li>
+                <li>Use token for authenticated API calls</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Check if we have token in URL (after OAuth2 redirect)
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            const userId = urlParams.get('userId');
+            const username = urlParams.get('username');
+            const email = urlParams.get('email');
+            
+            if (token) {
+                // Store token
+                localStorage.setItem('jwt_token', token);
+                localStorage.setItem('user', JSON.stringify({ userId, username, email }));
+                
+                // Display user info
+                document.getElementById('userId').textContent = userId;
+                document.getElementById('username').textContent = username;
+                document.getElementById('email').textContent = email;
+                document.getElementById('token').textContent = token.substring(0, 50) + '...';
+                document.getElementById('userInfo').classList.add('show');
+                
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Test the token
+                testAuthentication(token);
+            } else {
+                // Check if we have stored token
+                const storedToken = localStorage.getItem('jwt_token');
+                if (storedToken) {
+                    const user = JSON.parse(localStorage.getItem('user'));
+                    document.getElementById('userId').textContent = user.userId;
+                    document.getElementById('username').textContent = user.username;
+                    document.getElementById('email').textContent = user.email;
+                    document.getElementById('token').textContent = storedToken.substring(0, 50) + '...';
+                    document.getElementById('userInfo').classList.add('show');
+                }
+            }
+        };
+        
+        function testAuthentication(token) {
+            fetch('/test/user', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log('Authentication test successful:', data);
+            })
+            .catch(error => {
+                console.error('Authentication test failed:', error);
+            });
+        }
+        
+        function logout() {
+            localStorage.removeItem('jwt_token');
+            localStorage.removeItem('user');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

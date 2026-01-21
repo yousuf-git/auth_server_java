@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Manager Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-gray-800">Plant Manager Panel</h1>
+                <p class="text-sm text-gray-500">Manage customer accounts</p>
+            </div>
+            <button onclick="logout()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition">Logout</button>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Search and Filters -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <input type="text" id="search-input" placeholder="Search by email or phone..." 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+                </div>
+                <button onclick="loadCustomers()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition">
+                    Search
+                </button>
+            </div>
+        </div>
+
+        <!-- Customers Table -->
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gray-50">
+                <h2 class="text-lg font-semibold text-gray-800">Customer List</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customers-tbody" class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                                <div class="animate-pulse">Loading customers...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div id="reset-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Reset Password</h3>
+            <p class="text-gray-600 mb-4">Enter new password for <span id="reset-user-email" class="font-semibold"></span></p>
+            
+            <form id="reset-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                    <input type="password" id="new-password" required minlength="6"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                    <input type="password" id="confirm-password" required minlength="6"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+
+                <div id="reset-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm"></div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeResetModal()" 
+                        class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                        class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
+                        Reset Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // Check for OAuth2 redirect with token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        if (urlToken) {
+            localStorage.setItem('jwt_token', urlToken);
+            localStorage.setItem('user_id', urlParams.get('userId'));
+            localStorage.setItem('user_email', urlParams.get('email'));
+            localStorage.setItem('user_role', urlParams.get('role'));
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const token = localStorage.getItem('jwt_token');
+        let currentUserId = null;
+
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        async function loadCustomers() {
+            const tbody = document.getElementById('customers-tbody');
+            const searchTerm = document.getElementById('search-input').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/manager/customers`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (response.ok) {
+                    const customers = await response.json();
+                    
+                    // Filter based on search
+                    const filtered = searchTerm ? 
+                        customers.filter(c => 
+                            c.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (c.phone && c.phone.includes(searchTerm))
+                        ) : customers;
+
+                    displayCustomers(filtered);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">Failed to load customers</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error loading customers:', error);
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">Error loading customers</td></tr>';
+            }
+        }
+
+        function displayCustomers(customers) {
+            const tbody = document.getElementById('customers-tbody');
+            
+            if (customers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No customers found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = customers.map(customer => `
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${customer.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${customer.email}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${customer.phone || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                            ${customer.role ? customer.role.name : 'N/A'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        ${customer.isLocked ? 
+                            '<span class="text-red-600 font-medium">🔒 Locked</span>' : 
+                            '<span class="text-green-600 font-medium">✓ Active</span>'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${customer.provider || 'Local'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <button onclick="openResetModal(${customer.id}, '${customer.email}')" 
+                            class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-medium transition">
+                            Reset Password
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openResetModal(userId, email) {
+            currentUserId = userId;
+            document.getElementById('reset-user-email').textContent = email;
+            document.getElementById('reset-modal').classList.remove('hidden');
+            document.getElementById('reset-form').reset();
+            document.getElementById('reset-error').classList.add('hidden');
+        }
+
+        function closeResetModal() {
+            document.getElementById('reset-modal').classList.add('hidden');
+            currentUserId = null;
+        }
+
+        document.getElementById('reset-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const errorDiv = document.getElementById('reset-error');
+
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/manager/reset-password/${currentUserId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newPassword })
+                });
+
+                if (response.ok) {
+                    alert('Password reset successfully');
+                    closeResetModal();
+                } else {
+                    const data = await response.json();
+                    errorDiv.textContent = data.message || 'Failed to reset password';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error resetting password';
+                errorDiv.classList.remove('hidden');
+            }
+        });
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        // Load customers on page load
+        loadCustomers();
+    </script>
+</body>
+</html>
