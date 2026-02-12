@@ -3,11 +3,15 @@ package com.learning.security.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.security.dtos.LoginRequest;
 import com.learning.security.dtos.SignUpRequest;
+import com.learning.security.dtos.TokenPair;
+import com.learning.security.models.RefreshToken;
 import com.learning.security.models.Role;
 import com.learning.security.models.User;
-import com.learning.security.repos.RoleRepo;
-import com.learning.security.repos.UserRepo;
+import com.learning.security.services.RefreshTokenService;
+import com.learning.security.services.RoleService;
+import com.learning.security.services.UserService;
 import com.learning.security.services.UserDetailsImpl;
+import com.learning.security.utils.CookieUtils;
 import com.learning.security.utils.JwtUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,10 +44,10 @@ class AuthControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private UserRepo userRepo;
+    private UserService userService;
 
     @MockitoBean
-    private RoleRepo roleRepo;
+    private RoleService roleService;
 
     @MockitoBean
     private PasswordEncoder passwordEncoder;
@@ -54,13 +58,19 @@ class AuthControllerTest {
     @MockitoBean
     private JwtUtils jwtUtils;
 
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
+
+    @MockitoBean
+    private CookieUtils cookieUtils;
+
     private Role defaultRole;
 
     @BeforeEach
     void setUp() {
         defaultRole = new Role();
         defaultRole.setId(1);
-        defaultRole.setName("ROLE_USER");
+        defaultRole.setName("ROLE_CUSTOMER");
     }
 
     @Test
@@ -68,19 +78,41 @@ class AuthControllerTest {
         SignUpRequest signUpRequest = new SignUpRequest();
         signUpRequest.setEmail("test@example.com");
         signUpRequest.setPassword("password123");
-        signUpRequest.setRole("ROLE_USER");
+        signUpRequest.setRole("customer");
 
-        when(userRepo.existsByEmail("test@example.com")).thenReturn(false);
-        when(roleRepo.findByName("ROLE_USER")).thenReturn(Optional.of(defaultRole));
+        User savedUser = new User();
+        savedUser.setId(1);
+        savedUser.setEmail("test@example.com");
+        savedUser.setPassword("encodedPassword");
+        savedUser.setRole(defaultRole);
+
+        UserDetailsImpl userDetails = UserDetailsImpl.build(savedUser);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                userDetails, null, userDetails.getAuthorities());
+
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setUser(savedUser);
+        TokenPair tokenPair = new TokenPair(refreshToken, "raw-refresh-token");
+
+        when(userService.existsByEmail("test@example.com")).thenReturn(false);
+        when(roleService.findByName("ROLE_CUSTOMER")).thenReturn(Optional.of(defaultRole));
         when(passwordEncoder.encode("password123")).thenReturn("encodedPassword");
+        when(userService.save(any(User.class))).thenReturn(savedUser);
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(authentication);
+        when(jwtUtils.generateTokenByAuth(any(Authentication.class))).thenReturn("test.jwt.token");
+        when(jwtUtils.getJwtExpirationMs()).thenReturn(300000L);
+        when(refreshTokenService.createRefreshToken(any(User.class), any(), any()))
+                .thenReturn(tokenPair);
 
         mockMvc.perform(post("/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signUpRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("User registered successfully!"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accessToken").value("test.jwt.token"))
+                .andExpect(jsonPath("$.email").value("test@example.com"));
 
-        verify(userRepo, times(1)).save(any(User.class));
+        verify(userService, times(1)).save(any(User.class));
     }
 
     @Test
@@ -89,15 +121,15 @@ class AuthControllerTest {
         signUpRequest.setEmail("existing@example.com");
         signUpRequest.setPassword("password123");
 
-        when(userRepo.existsByEmail("existing@example.com")).thenReturn(true);
+        when(userService.existsByEmail("existing@example.com")).thenReturn(true);
 
         mockMvc.perform(post("/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signUpRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Error: Email is already in use!"));
+                .andExpect(jsonPath("$.message").value("Email already exists !"));
 
-        verify(userRepo, never()).save(any(User.class));
+        verify(userService, never()).save(any(User.class));
     }
 
     @Test
@@ -108,8 +140,8 @@ class AuthControllerTest {
 
         Role role = new Role();
         role.setId(1);
-        role.setName("ROLE_USER");
-        
+        role.setName("ROLE_CUSTOMER");
+
         User user = new User();
         user.setId(1);
         user.setEmail("test@example.com");
@@ -120,16 +152,24 @@ class AuthControllerTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 userDetails, null, userDetails.getAuthorities());
 
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setUser(user);
+        TokenPair tokenPair = new TokenPair(refreshToken, "raw-refresh-token");
+
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
-        when(jwtUtils.generateTokenByAuth(authentication)).thenReturn("test.jwt.token");
+        when(jwtUtils.generateTokenByAuth(any(Authentication.class))).thenReturn("test.jwt.token");
+        when(jwtUtils.getJwtExpirationMs()).thenReturn(300000L);
+        when(userService.findById(1)).thenReturn(Optional.of(user));
+        when(refreshTokenService.createRefreshToken(any(User.class), any(), any()))
+                .thenReturn(tokenPair);
 
         mockMvc.perform(post("/auth/signin")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("test.jwt.token"))
+                .andExpect(jsonPath("$.accessToken").value("test.jwt.token"))
                 .andExpect(jsonPath("$.email").value("test@example.com"))
-                .andExpect(jsonPath("$.role").value("ROLE_USER"));
+                .andExpect(jsonPath("$.role").value("ROLE_CUSTOMER"));
     }
 }

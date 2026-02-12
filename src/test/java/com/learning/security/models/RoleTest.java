@@ -189,15 +189,11 @@ class RoleTest {
 
     @Test
     void testRoleNameNull() {
-        // Given
+        // Given - Lombok @NonNull on name field throws NullPointerException
         Role role = new Role();
         role.setId(1);
-        role.setName(null);
 
-        // When
-        Set<ConstraintViolation<Role>> violations = validator.validate(role);
-
-        // Then
-        assertFalse(violations.isEmpty(), "Null role name should cause validation error");
+        // When & Then
+        assertThrows(NullPointerException.class, () -> role.setName(null));
     }
 }

@@ -2,20 +2,26 @@ package com.learning.security.controllers;
 
 import com.learning.security.dtos.ResponseMessage;
 import com.learning.security.dtos.SessionDTO;
+import com.learning.security.dtos.UserDTO;
+import com.learning.security.dtos.admin.*;
 import com.learning.security.enums.RevocationReason;
 import com.learning.security.models.Permission;
 import com.learning.security.models.RefreshToken;
 import com.learning.security.models.Role;
 import com.learning.security.models.User;
-import com.learning.security.repos.PermissionRepo;
 import com.learning.security.repos.RefreshTokenRepository;
-import com.learning.security.repos.RoleRepo;
-import com.learning.security.repos.UserRepo;
+import com.learning.security.services.PermissionService;
 import com.learning.security.services.RefreshTokenService;
+import com.learning.security.services.RoleService;
+import com.learning.security.services.UserService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -27,18 +33,18 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "*", maxAge = 3600)
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@Validated
 public class AdminController {
 
     @Autowired
-    private UserRepo userRepo;
+    private UserService userService;
 
     @Autowired
-    private RoleRepo roleRepo;
+    private RoleService roleService;
 
     @Autowired
-    private PermissionRepo permissionRepo;
+    private PermissionService permissionService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -52,81 +58,78 @@ public class AdminController {
     // ==================== User Management ====================
 
     @GetMapping("/users")
-    public ResponseEntity<List<User>> getAllUsers() {
-        return ResponseEntity.ok(userRepo.findAll());
+    public ResponseEntity<List<UserDTO>> getAllUsers() {
+        List<UserDTO> users = userService.findAll().stream()
+                .map(UserDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(users);
     }
 
     @GetMapping("/users/{id}")
-    public ResponseEntity<?> getUserById(@PathVariable Integer id) {
-        return userRepo.findById(id)
-                .map(ResponseEntity::ok)
+    public ResponseEntity<?> getUserById(@PathVariable @Positive Integer id) {
+        return userService.findById(id)
+                .map(user -> ResponseEntity.ok(UserDTO.fromEntity(user)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/users")
-    public ResponseEntity<?> createUser(@RequestBody Map<String, Object> request) {
-        String email = (String) request.get("email");
-        String password = (String) request.get("password");
-        Integer roleId = (Integer) request.get("roleId");
-
-        if (userRepo.existsByEmail(email)) {
+    public ResponseEntity<?> createUser(@Valid @RequestBody CreateUserRequest request) {
+        if (userService.existsByEmail(request.getEmail())) {
             return ResponseEntity.badRequest().body(new ResponseMessage("Email already exists"));
         }
 
         User user = new User();
-        user.setEmail(email);
-        user.setPassword(passwordEncoder.encode(password));
-        user.setPhone((String) request.get("phone"));
-        user.setIsLocked((Boolean) request.getOrDefault("isLocked", false));
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPhone(request.getPhone());
+        user.setIsLocked(request.getIsLocked() != null ? request.getIsLocked() : false);
 
-        if (roleId != null) {
-            roleRepo.findById(roleId).ifPresent(user::setRole);
+        if (request.getRoleId() != null) {
+            roleService.findById(request.getRoleId()).ifPresent(user::setRole);
         }
 
-        User savedUser = userRepo.save(user);
-        return ResponseEntity.ok(savedUser);
+        User savedUser = userService.save(user);
+        return new ResponseEntity<>(UserDTO.fromEntity(savedUser), HttpStatus.CREATED);
     }
 
     @PutMapping("/users/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Integer id, @RequestBody Map<String, Object> request) {
-        return userRepo.findById(id)
+    public ResponseEntity<?> updateUser(@PathVariable @Positive Integer id,
+                                        @Valid @RequestBody UpdateUserRequest request) {
+        return userService.findById(id)
                 .map(user -> {
-                    String email = (String) request.get("email");
-                    if (email != null && !email.equals(user.getEmail())) {
-                        if (userRepo.existsByEmail(email)) {
+                    if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+                        if (userService.existsByEmail(request.getEmail())) {
                             return ResponseEntity.badRequest().body(new ResponseMessage("Email already exists"));
                         }
-                        user.setEmail(email);
+                        user.setEmail(request.getEmail());
                     }
 
-                    String password = (String) request.get("password");
-                    if (password != null && !password.isEmpty()) {
-                        user.setPassword(passwordEncoder.encode(password));
+                    if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+                        user.setPassword(passwordEncoder.encode(request.getPassword()));
                     }
 
-                    if (request.containsKey("phone")) {
-                        user.setPhone((String) request.get("phone"));
+                    if (request.getPhone() != null) {
+                        user.setPhone(request.getPhone());
                     }
 
-                    if (request.containsKey("isLocked")) {
-                        user.setIsLocked((Boolean) request.get("isLocked"));
+                    if (request.getIsLocked() != null) {
+                        user.setIsLocked(request.getIsLocked());
                     }
 
-                    Integer roleId = (Integer) request.get("roleId");
-                    if (roleId != null) {
-                        roleRepo.findById(roleId).ifPresent(user::setRole);
+                    if (request.getRoleId() != null) {
+                        roleService.findById(request.getRoleId()).ifPresent(user::setRole);
                     }
 
-                    User savedUser = userRepo.save(user);
-                    return ResponseEntity.ok(savedUser);
+                    User savedUser = userService.save(user);
+                    return ResponseEntity.ok(UserDTO.fromEntity(savedUser));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/users/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable Integer id) {
-        if (userRepo.existsById(id)) {
-            userRepo.deleteById(id);
+    public ResponseEntity<?> deleteUser(@PathVariable @Positive Integer id) {
+        if (userService.existsById(id)) {
+            userService.deleteById(id);
             return ResponseEntity.ok(new ResponseMessage("User deleted successfully"));
         }
         return ResponseEntity.notFound().build();
@@ -136,92 +139,81 @@ public class AdminController {
 
     @GetMapping("/roles")
     public ResponseEntity<List<Role>> getAllRoles() {
-        return ResponseEntity.ok(roleRepo.findAll());
+        return ResponseEntity.ok(roleService.findAll());
     }
 
     @GetMapping("/roles/{id}")
-    public ResponseEntity<?> getRoleById(@PathVariable Integer id) {
-        return roleRepo.findById(id)
+    public ResponseEntity<?> getRoleById(@PathVariable @Positive Integer id) {
+        return roleService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/roles")
-    public ResponseEntity<?> createRole(@RequestBody Map<String, Object> request) {
-        String name = (String) request.get("name");
-        
-        if (roleRepo.existsByName(name)) {
+    public ResponseEntity<?> createRole(@Valid @RequestBody CreateRoleRequest request) {
+        if (roleService.existsByName(request.getName())) {
             return ResponseEntity.badRequest().body(new ResponseMessage("Role already exists"));
         }
 
         Role role = Role.builder()
-                .name(name)
-                .description((String) request.get("description"))
+                .name(request.getName())
+                .description(request.getDescription())
                 .permissions(new HashSet<>())
                 .build();
 
-        // Add permissions
-        @SuppressWarnings("unchecked")
-        List<Integer> permissionIds = (List<Integer>) request.get("permissionIds");
-        if (permissionIds != null) {
+        if (request.getPermissionIds() != null) {
             Set<Permission> permissions = new HashSet<>();
-            for (Integer permId : permissionIds) {
-                permissionRepo.findById(permId).ifPresent(permissions::add);
+            for (Integer permId : request.getPermissionIds()) {
+                permissionService.findById(permId).ifPresent(permissions::add);
             }
             role.setPermissions(permissions);
         }
 
-        Role savedRole = roleRepo.save(role);
-        return ResponseEntity.ok(savedRole);
+        Role savedRole = roleService.save(role);
+        return new ResponseEntity<>(savedRole, HttpStatus.CREATED);
     }
 
     @PutMapping("/roles/{id}")
-    public ResponseEntity<?> updateRole(@PathVariable Integer id, @RequestBody Map<String, Object> request) {
-        return roleRepo.findById(id)
+    public ResponseEntity<?> updateRole(@PathVariable @Positive Integer id,
+                                        @Valid @RequestBody UpdateRoleRequest request) {
+        return roleService.findById(id)
                 .map(role -> {
-                    String name = (String) request.get("name");
-                    if (name != null && !name.equals(role.getName())) {
-                        if (roleRepo.existsByName(name)) {
+                    if (request.getName() != null && !request.getName().equals(role.getName())) {
+                        if (roleService.existsByName(request.getName())) {
                             return ResponseEntity.badRequest().body(new ResponseMessage("Role name already exists"));
                         }
-                        role.setName(name);
+                        role.setName(request.getName());
                     }
 
-                    if (request.containsKey("description")) {
-                        role.setDescription((String) request.get("description"));
+                    if (request.getDescription() != null) {
+                        role.setDescription(request.getDescription());
                     }
 
-                    // Update permissions
-                    @SuppressWarnings("unchecked")
-                    List<Integer> permissionIds = (List<Integer>) request.get("permissionIds");
-                    if (permissionIds != null) {
+                    if (request.getPermissionIds() != null) {
                         Set<Permission> permissions = new HashSet<>();
-                        for (Integer permId : permissionIds) {
-                            permissionRepo.findById(permId).ifPresent(permissions::add);
+                        for (Integer permId : request.getPermissionIds()) {
+                            permissionService.findById(permId).ifPresent(permissions::add);
                         }
                         role.setPermissions(permissions);
                     }
 
-                    Role savedRole = roleRepo.save(role);
+                    Role savedRole = roleService.save(role);
                     return ResponseEntity.ok(savedRole);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/roles/{id}")
-    public ResponseEntity<?> deleteRole(@PathVariable Integer id) {
-        if (roleRepo.existsById(id)) {
-            // Check if any users have this role
-            long userCount = userRepo.findAll().stream()
-                    .filter(u -> u.getRole() != null && u.getRole().getId().equals(id))
-                    .count();
-            
+    public ResponseEntity<?> deleteRole(@PathVariable @Positive Integer id) {
+        if (roleService.existsById(id)) {
+            long userCount = userService.countByRoleId(id);
+
             if (userCount > 0) {
                 return ResponseEntity.badRequest()
                         .body(new ResponseMessage("Cannot delete role: " + userCount + " users are assigned to this role"));
             }
-            
-            roleRepo.deleteById(id);
+
+            roleService.deleteById(id);
             return ResponseEntity.ok(new ResponseMessage("Role deleted successfully"));
         }
         return ResponseEntity.notFound().build();
@@ -231,37 +223,35 @@ public class AdminController {
 
     @GetMapping("/permissions")
     public ResponseEntity<List<Permission>> getAllPermissions() {
-        return ResponseEntity.ok(permissionRepo.findAll());
+        return ResponseEntity.ok(permissionService.findAll());
     }
 
     @GetMapping("/permissions/{id}")
-    public ResponseEntity<?> getPermissionById(@PathVariable Integer id) {
-        return permissionRepo.findById(id)
+    public ResponseEntity<?> getPermissionById(@PathVariable @Positive Integer id) {
+        return permissionService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/permissions")
-    public ResponseEntity<?> createPermission(@RequestBody Map<String, String> request) {
-        String name = request.get("name");
-        
-        if (permissionRepo.existsByName(name)) {
+    public ResponseEntity<?> createPermission(@Valid @RequestBody CreatePermissionRequest request) {
+        if (permissionService.existsByName(request.getName())) {
             return ResponseEntity.badRequest().body(new ResponseMessage("Permission already exists"));
         }
 
         Permission permission = Permission.builder()
-                .name(name)
-                .description(request.get("description"))
+                .name(request.getName())
+                .description(request.getDescription())
                 .build();
 
-        Permission savedPermission = permissionRepo.save(permission);
-        return ResponseEntity.ok(savedPermission);
+        Permission savedPermission = permissionService.save(permission);
+        return new ResponseEntity<>(savedPermission, HttpStatus.CREATED);
     }
 
     @DeleteMapping("/permissions/{id}")
-    public ResponseEntity<?> deletePermission(@PathVariable Integer id) {
-        if (permissionRepo.existsById(id)) {
-            permissionRepo.deleteById(id);
+    public ResponseEntity<?> deletePermission(@PathVariable @Positive Integer id) {
+        if (permissionService.existsById(id)) {
+            permissionService.deleteById(id);
             return ResponseEntity.ok(new ResponseMessage("Permission deleted successfully"));
         }
         return ResponseEntity.notFound().build();
@@ -274,35 +264,19 @@ public class AdminController {
      */
     @GetMapping("/sessions")
     public ResponseEntity<List<SessionDTO>> getAllActiveSessions() {
-        List<User> allUsers = userRepo.findAll();
-        List<SessionDTO> allSessions = new ArrayList<>();
-        
-        for (User user : allUsers) {
-            List<RefreshToken> userSessions = refreshTokenService.getActiveUserSessions(user);
-            allSessions.addAll(
-                userSessions.stream()
-                    .map(SessionDTO::fromRefreshTokenForAdmin)
-                    .collect(Collectors.toList())
-            );
-        }
-        
-        // Sort by lastUsedAt descending (most recent first)
-        allSessions.sort((a, b) -> {
-            if (a.getLastUsedAt() == null && b.getLastUsedAt() == null) return 0;
-            if (a.getLastUsedAt() == null) return 1;
-            if (b.getLastUsedAt() == null) return -1;
-            return b.getLastUsedAt().compareTo(a.getLastUsedAt());
-        });
-        
-        return ResponseEntity.ok(allSessions);
+        List<RefreshToken> allSessions = refreshTokenRepository.findAllActiveSessions(Instant.now());
+        List<SessionDTO> sessionDTOs = allSessions.stream()
+                .map(SessionDTO::fromRefreshTokenForAdmin)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(sessionDTOs);
     }
 
     /**
      * Get all active sessions for a specific user
      */
     @GetMapping("/users/{userId}/sessions")
-    public ResponseEntity<?> getUserSessions(@PathVariable Integer userId) {
-        return userRepo.findById(userId)
+    public ResponseEntity<?> getUserSessions(@PathVariable @Positive Integer userId) {
+        return userService.findById(userId)
                 .map(user -> {
                     List<RefreshToken> sessions = refreshTokenService.getActiveUserSessions(user);
                     List<SessionDTO> sessionDTOs = sessions.stream()
@@ -335,8 +309,8 @@ public class AdminController {
      * Revoke all sessions for a specific user
      */
     @DeleteMapping("/users/{userId}/sessions")
-    public ResponseEntity<?> revokeAllUserSessions(@PathVariable Integer userId) {
-        if (!userRepo.existsById(userId)) {
+    public ResponseEntity<?> revokeAllUserSessions(@PathVariable @Positive Integer userId) {
+        if (!userService.existsById(userId)) {
             return ResponseEntity.notFound().build();
         }
         refreshTokenService.revokeAllUserTokens(userId, RevocationReason.ADMIN_REVOKED);
@@ -348,23 +322,16 @@ public class AdminController {
      */
     @GetMapping("/sessions/stats")
     public ResponseEntity<Map<String, Object>> getSessionStats() {
-        List<User> allUsers = userRepo.findAll();
-        long totalActiveSessions = 0;
-        int usersWithActiveSessions = 0;
-        
-        for (User user : allUsers) {
-            long userSessions = refreshTokenRepository.countActiveSessionsByUserId(user.getId(), Instant.now());
-            totalActiveSessions += userSessions;
-            if (userSessions > 0) {
-                usersWithActiveSessions++;
-            }
-        }
-        
+        Instant now = Instant.now();
+        long totalActiveSessions = refreshTokenRepository.countAllActiveSessions(now);
+        long usersWithActiveSessions = refreshTokenRepository.countUsersWithActiveSessions(now);
+        long totalUsers = userService.count();
+
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalActiveSessions", totalActiveSessions);
         stats.put("usersWithActiveSessions", usersWithActiveSessions);
-        stats.put("totalUsers", allUsers.size());
-        
+        stats.put("totalUsers", totalUsers);
+
         return ResponseEntity.ok(stats);
     }
 }

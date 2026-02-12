@@ -34,7 +34,7 @@ import java.util.Set;
 @Entity
 @Table(name = "role")
 @Builder
-public class Role {
+public class Role implements java.io.Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -48,7 +48,7 @@ import lombok.NoArgsConstructor;
                 @UniqueConstraint(columnNames = "email"),
                 @UniqueConstraint(columnNames = "phone")
         })
-public class User {
+public class User implements java.io.Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

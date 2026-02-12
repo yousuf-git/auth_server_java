@@ -102,11 +102,10 @@ class JwtUtilsTest {
     }
 
     @Test
-    void testValidateJwt_WithInvalidToken_ReturnsFalse() {
+    void testValidateJwt_WithInvalidToken_ThrowsException() {
         String invalidToken = "invalid.jwt.token";
 
-        boolean isValid = jwtUtils.validateJwt(invalidToken);
-
-        assertFalse(isValid);
+        assertThrows(com.learning.security.exceptions.CustomJwtException.class,
+                () -> jwtUtils.validateJwt(invalidToken));
     }
 }

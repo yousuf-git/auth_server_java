@@ -4,12 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.security.dtos.TokenPair;
 import com.learning.security.models.User;
 import com.learning.security.payload.response.AuthResponse;
-import com.learning.security.repos.UserRepo;
+import com.learning.security.services.UserService;
 import com.learning.security.services.RefreshTokenService;
 import com.learning.security.services.UserDetailsImpl;
+import com.learning.security.utils.CookieUtils;
 import com.learning.security.utils.JwtUtils;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -44,10 +44,13 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private RefreshTokenService refreshTokenService;
 
     @Autowired
-    private UserRepo userRepo;
+    private UserService userService;
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private CookieUtils cookieUtils;
 
     @Value("#{'${yousuf.app.oauth2.authorized-redirect-uris}'.split(',')}")
     private List<String> authorizedRedirectUris;
@@ -55,31 +58,27 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                                         Authentication authentication) throws IOException, ServletException {
-        
+
         if (response.isCommitted()) {
             logger.debug("Response has already been committed.");
             return;
         }
 
         try {
-            // Generate access token (5 minutes)
             String accessToken = jwtUtils.generateTokenByAuth(authentication);
 
-            // Get user details
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             String role = userDetails.getAuthorities().iterator().next().getAuthority();
 
-            // Get user entity for refresh token creation
-            User user = userRepo.findById(userDetails.getId())
+            User user = userService.findById(userDetails.getId())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             // Generate refresh token (7 days) and set in secure cookie
             // OAuth2 client ID extracted from registration if available
             String oauthClientId = "google"; // Can be made dynamic based on provider
             TokenPair tokenPair = refreshTokenService.createRefreshToken(user, request, oauthClientId);
-            setRefreshTokenCookie(response, tokenPair.getRawToken());
+            cookieUtils.setRefreshTokenCookie(response, tokenPair.getRawToken());
 
-            // Build JSON response
             AuthResponse authResponse = new AuthResponse(
                     accessToken,
                     userDetails.getId(),
@@ -88,7 +87,6 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
                     jwtUtils.getJwtExpirationMs()
             );
 
-            // Write JSON response
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setStatus(HttpServletResponse.SC_OK);
             response.getWriter().write(objectMapper.writeValueAsString(authResponse));
@@ -101,18 +99,5 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             response.getWriter().write("{\"error\": \"Authentication successful but token generation failed\"}");
         }
-    }
-
-    /**
-     * Set refresh token in secure HttpOnly cookie
-     */
-    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);  // Prevent JavaScript access
-        cookie.setSecure(false);    // Set to true in production with HTTPS
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
-        cookie.setAttribute("SameSite", "Lax"); // CSRF protection
-        response.addCookie(cookie);
     }
 }

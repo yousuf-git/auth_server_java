@@ -53,19 +53,20 @@ class AuthTokenFilterTest {
     void testDoFilterInternal_ValidToken_SetsAuthentication() throws ServletException, IOException {
         String token = "valid.jwt.token";
         String email = "test@example.com";
-        
+
         Role role = new Role();
         role.setId(1);
-        role.setName("ROLE_USER");
-        
+        role.setName("ROLE_CUSTOMER");
+
         User user = new User();
         user.setId(1);
         user.setEmail(email);
         user.setPassword("encodedPassword");
         user.setRole(role);
-        
+
         UserDetailsImpl userDetails = UserDetailsImpl.build(user);
 
+        when(request.getRequestURI()).thenReturn("/api/user/profile");
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
         when(jwtUtils.validateJwt(token)).thenReturn(true);
         when(jwtUtils.getUsernameFromJwtToken(token)).thenReturn(email);
@@ -79,6 +80,7 @@ class AuthTokenFilterTest {
 
     @Test
     void testDoFilterInternal_NoAuthHeader_SkipsAuthentication() throws ServletException, IOException {
+        when(request.getRequestURI()).thenReturn("/api/user/profile");
         when(request.getHeader("Authorization")).thenReturn(null);
 
         authTokenFilter.doFilterInternal(request, response, filterChain);

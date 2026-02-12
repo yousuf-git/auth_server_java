@@ -265,9 +265,9 @@ class TestControllerTest {
 
     @Test
     void testCorsHeaders_PublicEndpoint() throws Exception {
-        // When & Then - Verify CORS headers are set
+        // When & Then - Verify CORS headers are set for allowed origin
         mockMvc.perform(get("/test/all")
-                .header("Origin", "http://example.com"))
+                .header("Origin", "http://localhost:3000"))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("Access-Control-Allow-Origin"));
     }

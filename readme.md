@@ -188,6 +188,16 @@ Before diving in, make sure you have:
    curl http://localhost:8080/api/greet
    ```
 
+6. **Access the Application**
+
+   | Page | URL |
+   |------|-----|
+   | Login Page | http://localhost:8080/login.html |
+   | Signup Page | http://localhost:8080/signup.html |
+   | Swagger API Docs | http://localhost:8080/swagger-ui/index.html |
+
+   > **Note:** The HTML pages are for browser access. The API endpoints (`POST /auth/signin`, `POST /auth/signup`) are called internally by these pages via JavaScript.
+
 ---
 
 ## API Playground: Let's Test Drive!

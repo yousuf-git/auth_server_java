@@ -156,7 +156,7 @@ public class RefreshTokenService {
 
                 case RevocationReason.THEFT_DETECTED:
                     logger.info("THEFT_DETECTED token reused by User: {}", currentToken.getUser().getEmail());
-                    throw new RuntimeException("System Marked you as Chiller Chor. Login Again!");
+                    throw new RuntimeException("Session revoked for security reasons. Please login again.");
                 
                 default:
                     logger.info("Revoked token used (reason: {}). User: {}", reason, currentToken.getUser().getEmail());
@@ -280,7 +280,7 @@ public class RefreshTokenService {
      * Hash token using SHA-256
      * Never store plain tokens in database
      */
-    private String hashToken(String token) {
+    public static String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
@@ -293,7 +293,7 @@ public class RefreshTokenService {
     /**
      * Convert byte array to hex string
      */
-    private String bytesToHex(byte[] bytes) {
+    private static String bytesToHex(byte[] bytes) {
         StringBuilder result = new StringBuilder();
         for (byte b : bytes) {
             result.append(String.format("%02x", b));

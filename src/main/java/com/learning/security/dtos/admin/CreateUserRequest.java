@@ -1,16 +1,12 @@
-package com.learning.security.dtos;
+package com.learning.security.dtos.admin;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class LoginRequest {
+public class CreateUserRequest {
 
     @NotBlank
     @Email
@@ -20,4 +16,10 @@ public class LoginRequest {
     @Size(min = 6, max = 30)
     private String password;
 
+    @Size(max = 20)
+    private String phone;
+
+    private Integer roleId;
+
+    private Boolean isLocked;
 }

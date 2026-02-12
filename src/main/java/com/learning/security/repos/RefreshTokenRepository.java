@@ -104,6 +104,24 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Stri
     List<RefreshToken> findActiveSessionsByUser(@Param("user") User user, @Param("now") Instant now);
 
     /**
+     * Find all active sessions across all users (for admin dashboard)
+     */
+    @Query("SELECT rt FROM RefreshToken rt JOIN FETCH rt.user WHERE rt.revokedAt IS NULL AND rt.expiresAt > :now ORDER BY rt.lastUsedAt DESC")
+    List<RefreshToken> findAllActiveSessions(@Param("now") Instant now);
+
+    /**
+     * Count all active sessions across all users
+     */
+    @Query("SELECT COUNT(rt) FROM RefreshToken rt WHERE rt.revokedAt IS NULL AND rt.expiresAt > :now")
+    long countAllActiveSessions(@Param("now") Instant now);
+
+    /**
+     * Count distinct users with active sessions
+     */
+    @Query("SELECT COUNT(DISTINCT rt.user.id) FROM RefreshToken rt WHERE rt.revokedAt IS NULL AND rt.expiresAt > :now")
+    long countUsersWithActiveSessions(@Param("now") Instant now);
+
+    /**
      * Check if token exists by hash
      */
     boolean existsByTokenHash(String tokenHash);

@@ -29,7 +29,7 @@ import java.sql.Timestamp;
 @Builder
 @Entity
 @Table(name = "permission")
-public class Permission {
+public class Permission implements java.io.Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

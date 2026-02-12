@@ -1,7 +1,11 @@
 package com.learning.security.exceptions;
 
+import com.learning.security.dtos.ResponseMessage;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,7 +22,7 @@ import java.util.Map;
  * <h2>GlobalExceptionHandler</h2>
  * <p>
  * <b>Purpose:</b><br>
- * This class acts as a centralized exception handler for the entire application. That's why Annotated with @RestControllerAdvice<br>
+ * This class acts as a centralized exception handler for the entire application. That's why Annotated with @RestControllerAdvice <br>
  * </p>
  * <ul>
  *   <li>Handles exceptions thrown by controllers and other components globally.</li>
@@ -42,7 +46,7 @@ public class GlobalExceptionHandler {
      * <h3>handleValidationExceptions</h3>
      * <p>
      * <b>Purpose:</b><br>
-     * Handles validation errors for method arguments annotated with @Valid.<br>
+     * Handles validation errors for method arguments annotated with @Valid. <br>
      * </p>
      * <ul>
      *   <li>Collects all field errors and returns them in a map.</li>
@@ -68,9 +72,25 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
     }
 
-    // @ExceptionHandler(Exception.class)
-    // public ResponseEntity<?> handleValidationExceptions(Exception ex) {
-    //     log.error(ex.getClass() + ex.getMessage());
-    //     return new ResponseEntity<>(new ResponseMessage("Server Error, Try later !"), HttpStatus.INTERNAL_SERVER_ERROR);
-    // }
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ResponseMessage> handleConstraintViolation(ConstraintViolationException ex) {
+        return ResponseEntity.badRequest().body(new ResponseMessage("Invalid request parameters"));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ResponseMessage> handleUnreadable(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(new ResponseMessage("Malformed request body"));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public void handleAccessDenied(AccessDeniedException ex) throws AccessDeniedException {
+        throw ex; // Re-throw so Spring Security's AccessDeniedHandler returns 403
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ResponseMessage> handleGeneral(Exception ex) {
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ResponseMessage("An unexpected error occurred"));
+    }
 }
