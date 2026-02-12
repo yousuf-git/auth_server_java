@@ -1,22 +1,26 @@
 package com.learning.security.controllers;
 
 import com.learning.security.dtos.ResponseMessage;
+import com.learning.security.dtos.SessionDTO;
+import com.learning.security.enums.RevocationReason;
 import com.learning.security.models.Permission;
+import com.learning.security.models.RefreshToken;
 import com.learning.security.models.Role;
 import com.learning.security.models.User;
 import com.learning.security.repos.PermissionRepo;
+import com.learning.security.repos.RefreshTokenRepository;
 import com.learning.security.repos.RoleRepo;
 import com.learning.security.repos.UserRepo;
+import com.learning.security.services.RefreshTokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Controller for Admin operations - full user, role, and permission management
@@ -38,6 +42,12 @@ public class AdminController {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private RefreshTokenService refreshTokenService;
 
     // ==================== User Management ====================
 
@@ -255,5 +265,106 @@ public class AdminController {
             return ResponseEntity.ok(new ResponseMessage("Permission deleted successfully"));
         }
         return ResponseEntity.notFound().build();
+    }
+
+    // ==================== Session Management ====================
+
+    /**
+     * Get all active sessions across all users
+     */
+    @GetMapping("/sessions")
+    public ResponseEntity<List<SessionDTO>> getAllActiveSessions() {
+        List<User> allUsers = userRepo.findAll();
+        List<SessionDTO> allSessions = new ArrayList<>();
+        
+        for (User user : allUsers) {
+            List<RefreshToken> userSessions = refreshTokenService.getActiveUserSessions(user);
+            allSessions.addAll(
+                userSessions.stream()
+                    .map(SessionDTO::fromRefreshTokenForAdmin)
+                    .collect(Collectors.toList())
+            );
+        }
+        
+        // Sort by lastUsedAt descending (most recent first)
+        allSessions.sort((a, b) -> {
+            if (a.getLastUsedAt() == null && b.getLastUsedAt() == null) return 0;
+            if (a.getLastUsedAt() == null) return 1;
+            if (b.getLastUsedAt() == null) return -1;
+            return b.getLastUsedAt().compareTo(a.getLastUsedAt());
+        });
+        
+        return ResponseEntity.ok(allSessions);
+    }
+
+    /**
+     * Get all active sessions for a specific user
+     */
+    @GetMapping("/users/{userId}/sessions")
+    public ResponseEntity<?> getUserSessions(@PathVariable Integer userId) {
+        return userRepo.findById(userId)
+                .map(user -> {
+                    List<RefreshToken> sessions = refreshTokenService.getActiveUserSessions(user);
+                    List<SessionDTO> sessionDTOs = sessions.stream()
+                            .map(SessionDTO::fromRefreshTokenForAdmin)
+                            .collect(Collectors.toList());
+                    return ResponseEntity.ok(sessionDTOs);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Revoke a specific session
+     */
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<?> revokeSession(@PathVariable String sessionId) {
+        return refreshTokenRepository.findById(sessionId)
+                .map(token -> {
+                    if (token.isRevoked()) {
+                        return ResponseEntity.badRequest()
+                                .body(new ResponseMessage("Session already revoked"));
+                    }
+                    token.revoke(RevocationReason.ADMIN_REVOKED);
+                    refreshTokenRepository.save(token);
+                    return ResponseEntity.ok(new ResponseMessage("Session revoked successfully"));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Revoke all sessions for a specific user
+     */
+    @DeleteMapping("/users/{userId}/sessions")
+    public ResponseEntity<?> revokeAllUserSessions(@PathVariable Integer userId) {
+        if (!userRepo.existsById(userId)) {
+            return ResponseEntity.notFound().build();
+        }
+        refreshTokenService.revokeAllUserTokens(userId, RevocationReason.ADMIN_REVOKED);
+        return ResponseEntity.ok(new ResponseMessage("All sessions revoked for user"));
+    }
+
+    /**
+     * Get session statistics
+     */
+    @GetMapping("/sessions/stats")
+    public ResponseEntity<Map<String, Object>> getSessionStats() {
+        List<User> allUsers = userRepo.findAll();
+        long totalActiveSessions = 0;
+        int usersWithActiveSessions = 0;
+        
+        for (User user : allUsers) {
+            long userSessions = refreshTokenRepository.countActiveSessionsByUserId(user.getId(), Instant.now());
+            totalActiveSessions += userSessions;
+            if (userSessions > 0) {
+                usersWithActiveSessions++;
+            }
+        }
+        
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalActiveSessions", totalActiveSessions);
+        stats.put("usersWithActiveSessions", usersWithActiveSessions);
+        stats.put("totalUsers", allUsers.size());
+        
+        return ResponseEntity.ok(stats);
     }
 }

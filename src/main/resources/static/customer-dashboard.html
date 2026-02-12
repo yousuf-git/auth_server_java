@@ -10,11 +10,15 @@
     <nav class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
             <h1 class="text-xl font-semibold text-gray-800">Customer Portal</h1>
-            <button onclick="logout()" class="text-sm text-red-600 hover:text-red-800 font-medium">Logout</button>
+            <div class="flex items-center gap-4">
+                <button onclick="logoutAll()" class="text-sm text-orange-600 hover:text-orange-800 font-medium">Logout All Devices</button>
+                <button onclick="logout()" class="text-sm text-red-600 hover:text-red-800 font-medium">Logout</button>
+            </div>
         </div>
     </nav>
 
-    <div class="max-w-4xl mx-auto mt-10 px-4">
+    <div class="max-w-4xl mx-auto mt-10 px-4 space-y-6">
+        <!-- Profile Card -->
         <div class="bg-white rounded-lg shadow-xl overflow-hidden">
             <!-- Profile Header -->
             <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-12 text-white">
@@ -62,11 +66,36 @@
                         <p id="detail-status" class="text-gray-800 font-medium">-</p>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="text-center pt-6 border-t">
-                    <p class="text-gray-500 text-sm">For account assistance, please contact your plant manager</p>
+        <!-- Active Sessions Card -->
+        <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+            <div class="px-8 py-6">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">Active Sessions</h3>
+                        <p class="text-sm text-gray-500">Manage your logged-in devices</p>
+                    </div>
+                    <button onclick="loadSessions()" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm transition">
+                        🔄 Refresh
+                    </button>
+                </div>
+
+                <div id="sessions-list" class="space-y-4">
+                    <div class="text-center text-gray-500 py-8">Loading sessions...</div>
+                </div>
+
+                <div class="mt-6 pt-6 border-t">
+                    <button onclick="revokeOtherSessions()" id="revoke-others-btn" class="w-full px-4 py-3 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg font-medium transition hidden">
+                        🚫 Logout from all other devices
+                    </button>
                 </div>
             </div>
+        </div>
+
+        <div class="text-center py-4">
+            <p class="text-gray-500 text-sm">For account assistance, please contact your plant manager</p>
         </div>
     </div>
 
@@ -90,23 +119,96 @@
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        const token = localStorage.getItem('jwt_token');
+        let token = localStorage.getItem('jwt_token');
         if (!token) {
             window.location.href = '/login.html';
         }
 
-        async function loadUserProfile() {
+        // ==================== Token Refresh Logic ====================
+        let isRefreshing = false;
+        let refreshSubscribers = [];
+
+        function subscribeTokenRefresh(callback) {
+            refreshSubscribers.push(callback);
+        }
+
+        function onTokenRefreshed(newToken) {
+            refreshSubscribers.forEach(callback => callback(newToken));
+            refreshSubscribers = [];
+        }
+
+        async function refreshToken() {
             try {
-                const response = await fetch(`${API_BASE}/api/user/profile`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                const response = await fetch(`${API_BASE}/auth/refresh`, {
+                    method: 'POST',
+                    credentials: 'include' // Important: sends refresh token cookie
                 });
 
-                if (response.status === 401) {
-                    logout();
-                    return;
+                if (response.ok) {
+                    const data = await response.json();
+                    const newToken = data.accessToken;
+                    localStorage.setItem('jwt_token', newToken);
+                    token = newToken;
+                    console.log('✅ Token refreshed successfully');
+                    return newToken;
+                } else {
+                    console.error('❌ Refresh token expired or invalid');
+                    throw new Error('Refresh failed');
                 }
+            } catch (error) {
+                console.error('❌ Token refresh failed:', error);
+                throw error;
+            }
+        }
+
+        // API wrapper that handles automatic token refresh
+        async function apiRequest(url, options = {}) {
+            // Set default headers
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`
+            };
+            options.credentials = 'include';
+
+            let response = await fetch(url, options);
+
+            // If 401, try to refresh the token
+            if (response.status === 401) {
+                if (!isRefreshing) {
+                    isRefreshing = true;
+                    try {
+                        const newToken = await refreshToken();
+                        isRefreshing = false;
+                        onTokenRefreshed(newToken);
+
+                        // Retry original request with new token
+                        options.headers['Authorization'] = `Bearer ${newToken}`;
+                        response = await fetch(url, options);
+                    } catch (error) {
+                        isRefreshing = false;
+                        // Refresh failed, logout
+                        logout();
+                        return null;
+                    }
+                } else {
+                    // Wait for the refresh to complete
+                    return new Promise((resolve) => {
+                        subscribeTokenRefresh(async (newToken) => {
+                            options.headers['Authorization'] = `Bearer ${newToken}`;
+                            const retryResponse = await fetch(url, options);
+                            resolve(retryResponse);
+                        });
+                    });
+                }
+            }
+
+            return response;
+        }
+
+        async function loadUserProfile() {
+            try {
+                const response = await apiRequest(`${API_BASE}/api/user/profile`);
+                if (!response) return; // Already redirected to login
 
                 if (response.ok) {
                     const user = await response.json();
@@ -143,13 +245,190 @@
             }
         }
 
-        function logout() {
+        async function loadSessions() {
+            try {
+                const response = await apiRequest(`${API_BASE}/api/user/sessions`);
+                if (!response) return; // Already redirected to login
+
+                if (response.ok) {
+                    const sessions = await response.json();
+                    displaySessions(sessions);
+                } else {
+                    document.getElementById('sessions-list').innerHTML = 
+                        '<div class="text-center text-red-500 py-8">Failed to load sessions</div>';
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('sessions-list').innerHTML = 
+                    '<div class="text-center text-red-500 py-8">Error loading sessions</div>';
+            }
+        }
+
+        function displaySessions(sessions) {
+            const container = document.getElementById('sessions-list');
+            const revokeOthersBtn = document.getElementById('revoke-others-btn');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-8">No active sessions found</div>';
+                revokeOthersBtn.classList.add('hidden');
+                return;
+            }
+
+            // Show "revoke others" button if there are multiple sessions
+            if (sessions.length > 1) {
+                revokeOthersBtn.classList.remove('hidden');
+            } else {
+                revokeOthersBtn.classList.add('hidden');
+            }
+
+            container.innerHTML = sessions.map(session => `
+                <div class="border ${session.currentSession ? 'border-green-300 bg-green-50' : 'border-gray-200'} rounded-lg p-4 hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">${getDeviceIcon(session.userAgent)}</span>
+                                <span class="font-medium text-gray-800">${session.userAgent || 'Unknown Device'}</span>
+                                ${session.currentSession ? '<span class="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">This device</span>' : ''}
+                            </div>
+                            <div class="text-sm text-gray-600 mt-2 space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-400">📍</span>
+                                    <span>IP: ${session.ipAddress || 'Unknown'}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-400">🕐</span>
+                                    <span>Last active: ${session.lastUsedAt ? formatDate(session.lastUsedAt) : 'Just now'}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-400">📅</span>
+                                    <span>Signed in: ${formatDate(session.issuedAt)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${!session.currentSession ? `
+                            <button onclick="revokeSession('${session.sessionId}')" class="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition">
+                                Logout
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getDeviceIcon(userAgent) {
+            if (!userAgent) return '💻';
+            if (userAgent.toLowerCase().includes('mobile') || userAgent.toLowerCase().includes('android') || userAgent.toLowerCase().includes('iphone')) {
+                return '📱';
+            }
+            if (userAgent.toLowerCase().includes('tablet') || userAgent.toLowerCase().includes('ipad')) {
+                return '📱';
+            }
+            return '💻';
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            
+            // Less than 1 minute ago
+            if (diff < 60000) {
+                return 'Just now';
+            }
+            // Less than 1 hour ago
+            if (diff < 3600000) {
+                const minutes = Math.floor(diff / 60000);
+                return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            }
+            // Less than 24 hours ago
+            if (diff < 86400000) {
+                const hours = Math.floor(diff / 3600000);
+                return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            }
+            // Otherwise show date
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        async function revokeSession(sessionId) {
+            if (!confirm('Are you sure you want to logout from this device?')) return;
+            
+            try {
+                const response = await apiRequest(`${API_BASE}/api/user/sessions/${sessionId}`, {
+                    method: 'DELETE'
+                });
+                if (!response) return;
+
+                if (response.ok) {
+                    alert('Device logged out successfully');
+                    loadSessions();
+                } else {
+                    const data = await response.json();
+                    alert(data.message || 'Failed to logout device');
+                }
+            } catch (error) {
+                console.error('Error revoking session:', error);
+                alert('Error logging out device');
+            }
+        }
+
+        async function revokeOtherSessions() {
+            if (!confirm('Are you sure you want to logout from all other devices? This will sign you out everywhere except this device.')) return;
+            
+            try {
+                const response = await apiRequest(`${API_BASE}/api/user/sessions/other`, {
+                    method: 'DELETE'
+                });
+                if (!response) return;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(data.message || 'Logged out from all other devices');
+                    loadSessions();
+                } else {
+                    const data = await response.json();
+                    alert(data.message || 'Failed to logout other devices');
+                }
+            } catch (error) {
+                console.error('Error revoking other sessions:', error);
+                alert('Error logging out other devices');
+            }
+        }
+
+        async function logoutAll() {
+            if (!confirm('Are you sure you want to logout from ALL devices including this one?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/logout-all`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                // Always redirect to login after logout-all
+                localStorage.clear();
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('Error logging out:', error);
+                localStorage.clear();
+                window.location.href = '/login.html';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(`${API_BASE}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
             localStorage.clear();
             window.location.href = '/login.html';
         }
 
-        // Load profile on page load
+        // Load data on page load
         loadUserProfile();
+        loadSessions();
     </script>
 </body>
 </html>

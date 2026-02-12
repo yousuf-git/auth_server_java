@@ -37,7 +37,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = "*", maxAge = 3600, allowCredentials = "true") // Allow credentials for cookies, maxAge is in seconds; 3600s = 1 hr
+@CrossOrigin(originPatterns = "*", maxAge = 3600, allowCredentials = "true") // Allow credentials for cookies, maxAge is in seconds; 3600s = 1 hr
 /*
  * The HTTP Access-Control-Max-Age response header indicates how long the
  * results of a preflight request (that is, the information contained in the
