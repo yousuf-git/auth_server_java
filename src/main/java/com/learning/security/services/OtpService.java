@@ -2,24 +2,21 @@ package com.learning.security.services;
 
 import com.learning.security.enums.OtpType;
 import com.learning.security.exceptions.OtpException;
-import com.learning.security.models.Otp;
 import com.learning.security.models.User;
-import com.learning.security.repos.OtpRepository;
 import com.learning.security.services.email.EmailService;
 import com.learning.security.services.email.EmailTemplateService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 
 @Service
 @Slf4j
@@ -27,8 +24,14 @@ public class OtpService {
 
     private static final SecureRandom secureRandom = new SecureRandom();
 
+    // Redis key prefixes
+    private static final String OTP_KEY_PREFIX = "otp:";           // otp:{type}:{email} -> hashed code
+    private static final String OTP_ATTEMPTS_PREFIX = "otp:att:";  // otp:att:{type}:{email} -> attempt count
+    private static final String OTP_RATE_PREFIX = "otp:rate:";     // otp:rate:{type}:{email} -> request count in current hour
+    private static final String OTP_COOLDOWN_PREFIX = "otp:cd:";   // otp:cd:{type}:{email} -> cooldown marker
+
     @Autowired
-    private OtpRepository otpRepository;
+    private StringRedisTemplate redisTemplate;
 
     @Autowired
     private EmailService emailService;
@@ -50,15 +53,11 @@ public class OtpService {
 
     // ──────────────────────────── Send OTPs ────────────────────────────
 
-    @Transactional
     public void sendVerificationOtp(User user, HttpServletRequest request) {
-        checkRateLimit(user, OtpType.EMAIL_VERIFICATION);
-
-        // Invalidate any previous unused OTPs
-        otpRepository.invalidateAllOtps(user, OtpType.EMAIL_VERIFICATION);
+        checkRateLimit(user.getEmail(), OtpType.EMAIL_VERIFICATION);
 
         String code = generateOtpCode();
-        saveOtp(user, code, OtpType.EMAIL_VERIFICATION, request);
+        storeOtp(user.getEmail(), code, OtpType.EMAIL_VERIFICATION);
 
         String htmlBody = emailTemplateService.buildVerificationEmail(
                 user.getFirstName(), code, otpExpiryMinutes);
@@ -67,15 +66,11 @@ public class OtpService {
         log.info("Verification OTP sent to: {}", user.getEmail());
     }
 
-    @Transactional
     public void sendPasswordResetOtp(User user, HttpServletRequest request) {
-        checkRateLimit(user, OtpType.PASSWORD_RESET);
-
-        // Invalidate any previous unused OTPs
-        otpRepository.invalidateAllOtps(user, OtpType.PASSWORD_RESET);
+        checkRateLimit(user.getEmail(), OtpType.PASSWORD_RESET);
 
         String code = generateOtpCode();
-        saveOtp(user, code, OtpType.PASSWORD_RESET, request);
+        storeOtp(user.getEmail(), code, OtpType.PASSWORD_RESET);
 
         String htmlBody = emailTemplateService.buildPasswordResetEmail(
                 user.getFirstName(), code, otpExpiryMinutes);
@@ -86,27 +81,40 @@ public class OtpService {
 
     // ──────────────────────────── Verify OTP ────────────────────────────
 
-    @Transactional
-    public boolean verifyOtp(User user, String code, OtpType type) {
-        Otp otp = otpRepository
-                .findTopByUserAndTypeAndUsedFalseAndExpiresAtAfterOrderByCreatedAtDesc(user, type, Instant.now())
-                .orElseThrow(() -> new OtpException("No valid OTP found. Please request a new one."));
+    public boolean verifyOtp(String email, String code, OtpType type) {
+        String otpKey = otpKey(type, email);
+        String attemptsKey = attemptsKey(type, email);
 
-        if (otp.getAttempts() >= otp.getMaxAttempts()) {
-            otp.markAsUsed();
-            otpRepository.save(otp);
+        String storedHash = redisTemplate.opsForValue().get(otpKey);
+        if (storedHash == null) {
+            throw new OtpException("OTP expired or not found. Please request a new one.");
+        }
+
+        // Check attempts
+        String attemptsStr = redisTemplate.opsForValue().get(attemptsKey);
+        int attempts = attemptsStr != null ? Integer.parseInt(attemptsStr) : 0;
+
+        if (attempts >= maxAttempts) {
+            // Invalidate the OTP
+            redisTemplate.delete(otpKey);
+            redisTemplate.delete(attemptsKey);
             throw new OtpException("Maximum verification attempts exceeded. Please request a new OTP.");
         }
 
-        if (!hashOtpCode(code).equals(otp.getCodeHash())) {
-            otp.incrementAttempts();
-            otpRepository.save(otp);
-            int remaining = otp.getMaxAttempts() - otp.getAttempts();
+        if (!hashOtpCode(code).equals(storedHash)) {
+            // Increment attempts
+            redisTemplate.opsForValue().increment(attemptsKey);
+            // Set TTL on attempts key to match OTP expiry if first attempt
+            if (attempts == 0) {
+                redisTemplate.expire(attemptsKey, Duration.ofMinutes(otpExpiryMinutes));
+            }
+            int remaining = maxAttempts - attempts - 1;
             throw new OtpException("Invalid OTP. " + remaining + " attempt(s) remaining.");
         }
 
-        otp.markAsUsed();
-        otpRepository.save(otp);
+        // OTP is valid — clean up
+        redisTemplate.delete(otpKey);
+        redisTemplate.delete(attemptsKey);
         return true;
     }
 
@@ -130,52 +138,49 @@ public class OtpService {
         }
     }
 
-    // ──────────────────────────── Cleanup ────────────────────────────
-
-    @Transactional
-    public int cleanupOtps() {
-        int deleted = otpRepository.cleanupExpiredAndUsedOtps(Instant.now());
-        log.info("Cleaned up {} expired/used OTP tokens", deleted);
-        return deleted;
-    }
-
     // ──────────────────────────── Helpers ────────────────────────────
 
-    private void checkRateLimit(User user, OtpType type) {
+    private void checkRateLimit(String email, OtpType type) {
+        String cooldownKey = cooldownKey(type, email);
+        String rateKey = rateKey(type, email);
+
+        // Check cooldown between consecutive OTPs
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+            Long ttl = redisTemplate.getExpire(cooldownKey);
+            long secondsRemaining = ttl != null && ttl > 0 ? ttl : cooldownSeconds;
+            throw new OtpException("Please wait " + secondsRemaining + " seconds before requesting a new OTP.");
+        }
+
         // Check hourly limit
-        long recentCount = otpRepository.countRecentOtps(user, type, Instant.now().minus(1, ChronoUnit.HOURS));
-        if (recentCount >= maxPerHour) {
+        String countStr = redisTemplate.opsForValue().get(rateKey);
+        int count = countStr != null ? Integer.parseInt(countStr) : 0;
+        if (count >= maxPerHour) {
             throw new OtpException("Too many OTP requests. Please try again later.");
         }
 
-        // Check cooldown between consecutive OTPs
-        otpRepository
-                .findTopByUserAndTypeAndUsedFalseAndExpiresAtAfterOrderByCreatedAtDesc(user, type, Instant.now())
-                .ifPresent(lastOtp -> {
-                    Instant cooldownEnd = lastOtp.getCreatedAt().plus(cooldownSeconds, ChronoUnit.SECONDS);
-                    if (Instant.now().isBefore(cooldownEnd)) {
-                        long secondsRemaining = Instant.now().until(cooldownEnd, ChronoUnit.SECONDS);
-                        throw new OtpException(
-                                "Please wait " + secondsRemaining + " seconds before requesting a new OTP.");
-                    }
-                });
+        // Increment rate counter
+        redisTemplate.opsForValue().increment(rateKey);
+        if (count == 0) {
+            redisTemplate.expire(rateKey, Duration.ofHours(1));
+        }
+
+        // Set cooldown marker
+        redisTemplate.opsForValue().set(cooldownKey, "1", Duration.ofSeconds(cooldownSeconds));
     }
 
-    private void saveOtp(User user, String code, OtpType type, HttpServletRequest request) {
-        Otp otp = Otp.builder()
-                .user(user)
-                .codeHash(hashOtpCode(code))
-                .type(type)
-                .expiresAt(Instant.now().plus(otpExpiryMinutes, ChronoUnit.MINUTES))
-                .maxAttempts(maxAttempts)
-                .ipAddress(extractIpAddress(request))
-                .build();
+    private void storeOtp(String email, String code, OtpType type) {
+        String otpKey = otpKey(type, email);
+        String attemptsKey = attemptsKey(type, email);
 
-        otpRepository.save(otp);
+        // Store hashed OTP with TTL
+        redisTemplate.opsForValue().set(otpKey, hashOtpCode(code), Duration.ofMinutes(otpExpiryMinutes));
+
+        // Reset attempts counter
+        redisTemplate.delete(attemptsKey);
     }
 
     private String generateOtpCode() {
-        int code = 100_000 + secureRandom.nextInt(900_000); // 6-digit code
+        int code = 100_000 + secureRandom.nextInt(900_000);
         return String.valueOf(code);
     }
 
@@ -193,10 +198,21 @@ public class OtpService {
         }
     }
 
-    private String extractIpAddress(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty()) ip = request.getHeader("X-Real-IP");
-        if (ip == null || ip.isEmpty()) ip = request.getRemoteAddr();
-        return ip != null ? ip : "unknown";
+    // ──────────────────────────── Key Builders ────────────────────────────
+
+    private String otpKey(OtpType type, String email) {
+        return OTP_KEY_PREFIX + type.name().toLowerCase() + ":" + email.toLowerCase();
+    }
+
+    private String attemptsKey(OtpType type, String email) {
+        return OTP_ATTEMPTS_PREFIX + type.name().toLowerCase() + ":" + email.toLowerCase();
+    }
+
+    private String rateKey(OtpType type, String email) {
+        return OTP_RATE_PREFIX + type.name().toLowerCase() + ":" + email.toLowerCase();
+    }
+
+    private String cooldownKey(OtpType type, String email) {
+        return OTP_COOLDOWN_PREFIX + type.name().toLowerCase() + ":" + email.toLowerCase();
     }
 }
