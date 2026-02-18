@@ -60,6 +60,8 @@ class AuthTokenFilterTest {
 
         User user = new User();
         user.setId(1);
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail(email);
         user.setPassword("encodedPassword");
         user.setRole(role);

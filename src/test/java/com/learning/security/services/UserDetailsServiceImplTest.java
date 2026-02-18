@@ -96,7 +96,7 @@ class UserDetailsServiceImplTest {
     void testLoadUserByUsername_LockedAccount() {
         // Given
         String email = "locked@example.com";
-        Role role = Role.builder().id(1).name("ROLE_USER").build();
+        Role role = Role.builder().id(3).name("ROLE_USER").build();
         User user = createUser(email, role);
         user.setIsLocked(true);
         

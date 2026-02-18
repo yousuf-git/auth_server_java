@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.util.List;
 
+
 @Data
 public class UpdateRoleRequest {
 
@@ -15,4 +16,6 @@ public class UpdateRoleRequest {
     private String description;
 
     private List<Integer> permissionIds;
+
+    private Boolean isActive;
 }

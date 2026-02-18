@@ -12,7 +12,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SignUpRequest {
-    
+
+    @NotBlank
+    @NotNull
+    private String firstName;
+
+    @NotBlank
+    @NotNull
+    private String lastName;
+
     @NotBlank
     @NotNull
     @Email
@@ -23,13 +31,19 @@ public class SignUpRequest {
     @NotNull
     private String password;
     
-    private String role;  // if null will be passed, by default it will be CUSTOMER
+    private String phone;
+
+    private String role;  // looked up by name from DB; if null, no default assigned
 
 }
 
-// Dummy JSON for testing:
-// {
-//   "email": "yousuf@gmail.com",
-//   "password": "yousuf123",
-//   "role": "admin"
-// }
+/*
+Example:
+{
+    "firstName": "admin",
+    "lastName": "test",
+    "email": "admin@test.com",
+    "password": "admin123",
+    "phone": "+1234567890"
+}
+ */

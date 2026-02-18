@@ -76,12 +76,16 @@ class AuthControllerTest {
     @Test
     void testSignup_WithValidData_CreatesUser() throws Exception {
         SignUpRequest signUpRequest = new SignUpRequest();
+        signUpRequest.setFirstName("Test");
+        signUpRequest.setLastName("User");
         signUpRequest.setEmail("test@example.com");
         signUpRequest.setPassword("password123");
-        signUpRequest.setRole("customer");
+        signUpRequest.setRole("ROLE_CUSTOMER");
 
         User savedUser = new User();
         savedUser.setId(1);
+        savedUser.setFirstName("Test");
+        savedUser.setLastName("User");
         savedUser.setEmail("test@example.com");
         savedUser.setPassword("encodedPassword");
         savedUser.setRole(defaultRole);
@@ -118,6 +122,8 @@ class AuthControllerTest {
     @Test
     void testSignup_WithExistingEmail_ReturnsError() throws Exception {
         SignUpRequest signUpRequest = new SignUpRequest();
+        signUpRequest.setFirstName("Test");
+        signUpRequest.setLastName("User");
         signUpRequest.setEmail("existing@example.com");
         signUpRequest.setPassword("password123");
 
@@ -144,6 +150,8 @@ class AuthControllerTest {
 
         User user = new User();
         user.setId(1);
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail("test@example.com");
         user.setPassword("encodedPassword");
         user.setRole(role);

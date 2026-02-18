@@ -22,4 +22,6 @@ public interface UserRepo extends JpaRepository<User, Integer> {
 
     @Query("SELECT u FROM User u WHERE u.role.name = :roleName")
     List<User> findByRoleName(@Param("roleName") String roleName);
+
+    Boolean existsByCnic(String cnic);
 }

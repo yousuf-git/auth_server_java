@@ -33,6 +33,7 @@ public class Permission implements java.io.Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "permission_id", updatable = false, nullable = false)
     private Integer id;
 
     @NotBlank
@@ -44,11 +45,11 @@ public class Permission implements java.io.Serializable {
     private String description;
 
     @CreationTimestamp
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private Timestamp createdAt;
 
     @NotNull
-    @Column(columnDefinition = "boolean default true")
+    @Column(name = "is_active", columnDefinition = "boolean default false")
     @Builder.Default
-    private Boolean isActive = true;
+    private Boolean isActive = false;
 }

@@ -2,6 +2,8 @@ package com.learning.security.controllers;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,11 +20,19 @@ import com.learning.security.dtos.LoginRequest;
 import com.learning.security.dtos.ResponseMessage;
 import com.learning.security.dtos.SignUpRequest;
 import com.learning.security.dtos.TokenPair;
+import com.learning.security.auth.AuthEntryPointJwt;
+import com.learning.security.dtos.ForgotPasswordRequest;
+import com.learning.security.dtos.ResetPasswordRequest;
+import com.learning.security.dtos.VerifyEmailRequest;
+import com.learning.security.dtos.ResendOtpRequest;
 import com.learning.security.enums.AuthProvider;
+import com.learning.security.enums.OtpType;
 import com.learning.security.enums.RevocationReason;
+import com.learning.security.exceptions.OtpException;
 import com.learning.security.models.Role;
 import com.learning.security.models.User;
 import com.learning.security.payload.response.AuthResponse;
+import com.learning.security.services.OtpService;
 import com.learning.security.services.RefreshTokenService;
 import com.learning.security.services.RoleService;
 import com.learning.security.services.UserService;
@@ -65,6 +75,11 @@ public class AuthController {
     @Autowired
     CookieUtils cookieUtils;
 
+    @Autowired
+    OtpService otpService;
+
+    org.slf4j.Logger log = LoggerFactory.getLogger(AuthController.class);
+
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@Valid @RequestBody SignUpRequest request,
                                     HttpServletRequest httpRequest,
@@ -75,15 +90,32 @@ public class AuthController {
         }
 
         User user = new User();
-        if (!setRole(user, request.getRole())) {
-            return new ResponseEntity<>(new ResponseMessage("No Valid role found in the request !"),
-                    HttpStatus.BAD_REQUEST);
-        }
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
         user.setEmail(request.getEmail());
         user.setPassword(encoder.encode(request.getPassword()));
+        user.setPhone(request.getPhone());
         user.setProvider(AuthProvider.LOCAL);
 
+        // Flexible role assignment: look up by name from DB, no hardcoded defaults
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            Role role = roleService.findByName(request.getRole()).orElse(null);
+            if (role == null) {
+                return new ResponseEntity<>(new ResponseMessage("Role '" + request.getRole() + "' not found!"),
+                        HttpStatus.BAD_REQUEST);
+            }
+            user.setRole(role);
+        }
+        // If no role provided, user is created without a role (can be assigned later)
+
         User savedUser = userService.save(user);
+
+        // Send email verification OTP (non-blocking: log error if email fails)
+        try {
+            otpService.sendVerificationOtp(savedUser, httpRequest);
+        } catch (Exception e) {
+            log.warn("Failed to send verification email to {}: {}", savedUser.getEmail(), e.getMessage());
+        }
 
         try {
             Authentication authentication = authManager.authenticate(
@@ -104,7 +136,8 @@ public class AuthController {
                 userDetails.getId(),
                 userDetails.getEmail(),
                 role,
-                jwtUtils.getJwtExpirationMs()
+                jwtUtils.getJwtExpirationMs(),
+                savedUser.getEmailVerified()
             );
 
             return new ResponseEntity<>(authResponse, HttpStatus.CREATED);
@@ -115,48 +148,16 @@ public class AuthController {
         }
     }
 
-    private boolean setRole(User user, String roleFromReq) {
-        if (roleFromReq == null || roleFromReq.isEmpty()) {
-            Role userRole = roleService.findByName("ROLE_CUSTOMER")
-                    .orElseThrow(() -> new RuntimeException("Error: Role not found in DB."));
-            user.setRole(userRole);
-            return true;
-        }
-
-        String roleName = "";
-        if (!(roleFromReq.equals("ROLE_CUSTOMER") ||
-                roleFromReq.equals("ROLE_ADMIN") ||
-                roleFromReq.equals("ROLE_PLANT_MANAGER"))) {
-            switch (roleFromReq.toLowerCase()) {
-                case "user":
-                case "customer":
-                    roleName = "ROLE_CUSTOMER";
-                    break;
-                case "admin":
-                    roleName = "ROLE_ADMIN";
-                    break;
-                case "mod":
-                case "manager":
-                case "plant_manager":
-                    roleName = "ROLE_PLANT_MANAGER";
-                    break;
-                default:
-                    return false;
-            }
-        } else {
-            roleName = roleFromReq;
-        }
-
-        Role role = roleService.findByName(roleName)
-                .orElseThrow(() -> new RuntimeException("Error: Role not found in DB."));
-        user.setRole(role);
-        return true;
-    }
-
     @PostMapping("/signin")
     public ResponseEntity<?> signin(@Valid @RequestBody LoginRequest loginRequest,
                                     HttpServletRequest httpRequest,
                                     HttpServletResponse httpResponse) {
+
+        // Check if user exists first to provide specific error message
+        if (!userService.existsByEmail(loginRequest.getEmail())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ResponseMessage("Email not registered"));
+        }
 
         try {
             Authentication authentication = authManager.authenticate(
@@ -177,12 +178,14 @@ public class AuthController {
 
             String role = userDetails.getRoles().isEmpty() ? "" : userDetails.getRoles().get(0).getAuthority();
 
+            User user = userService.findById(userDetails.getId()).orElseThrow();
             AuthResponse authResponse = new AuthResponse(
                 accessToken,
                 userDetails.getId(),
                 userDetails.getEmail(),
                 role,
-                jwtUtils.getJwtExpirationMs()
+                jwtUtils.getJwtExpirationMs(),
+                user.getEmailVerified()
             );
 
             return new ResponseEntity<>(authResponse, HttpStatus.OK);
@@ -191,8 +194,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ResponseMessage("Account is locked. Please contact administrator."));
         } catch (AuthenticationException e) {
+            log.error("Failed login attempt for email {}: {}", loginRequest.getEmail(), e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ResponseMessage("Invalid email or password"));
+                    .body(new ResponseMessage("Invalid password"));
         }
     }
 
@@ -222,7 +226,8 @@ public class AuthController {
                 user.getId(),
                 user.getEmail(),
                 role,
-                jwtUtils.getJwtExpirationMs()
+                jwtUtils.getJwtExpirationMs(),
+                user.getEmailVerified()
             );
 
             return new ResponseEntity<>(authResponse, HttpStatus.OK);
@@ -274,6 +279,123 @@ public class AuthController {
                     .body(new ResponseMessage("Invalid session"));
         }
     }
+
+    // ──────────────────────────── Forgot Password ────────────────────────────
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request,
+                                            HttpServletRequest httpRequest) {
+        // Always return success to prevent email enumeration
+        String genericMessage = "If an account exists with this email, we've sent a password reset code.";
+
+        try {
+            User user = userService.findByEmail(request.getEmail()).orElse(null);
+
+            if (user == null) {
+                return ResponseEntity.ok(new ResponseMessage(genericMessage));
+            }
+
+            // Only LOCAL users can reset password; OAuth users should use their provider
+            if (user.getProvider() != null && user.getProvider() != AuthProvider.LOCAL) {
+                return ResponseEntity.ok(new ResponseMessage(genericMessage));
+            }
+
+            otpService.sendPasswordResetOtp(user, httpRequest);
+        } catch (OtpException e) {
+            // Rate limit hit — still return generic message for security, but log it
+            log.warn("Forgot-password rate limited for {}: {}", request.getEmail(), e.getMessage());
+        } catch (Exception e) {
+            log.error("Error in forgot-password for {}: {}", request.getEmail(), e.getMessage());
+        }
+
+        return ResponseEntity.ok(new ResponseMessage(genericMessage));
+    }
+
+    // ──────────────────────────── Reset Password ────────────────────────────
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        User user = userService.findByEmail(request.getEmail())
+                .orElseThrow(() -> new OtpException("Invalid email or OTP."));
+
+        // Verify OTP
+        otpService.verifyOtp(user, request.getOtp(), OtpType.PASSWORD_RESET);
+
+        // Update password
+        user.setPassword(encoder.encode(request.getNewPassword()));
+        userService.save(user);
+
+        // Revoke all sessions for security (force re-login)
+        refreshTokenService.revokeAllUserTokens(user.getId(), RevocationReason.ADMIN_REVOKED);
+
+        // Send notification email
+        otpService.sendPasswordChangedNotification(user);
+
+        return ResponseEntity.ok(new ResponseMessage("Password has been reset successfully. Please login with your new password."));
+    }
+
+    // ──────────────────────────── Email Verification ────────────────────────────
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<?> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        User user = userService.findByEmail(request.getEmail())
+                .orElseThrow(() -> new OtpException("User not found."));
+
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            return ResponseEntity.ok(new ResponseMessage("Email is already verified."));
+        }
+
+        otpService.verifyOtp(user, request.getOtp(), OtpType.EMAIL_VERIFICATION);
+
+        user.setEmailVerified(true);
+        userService.save(user);
+
+        // Send welcome email
+        otpService.sendWelcomeEmail(user);
+
+        return ResponseEntity.ok(new ResponseMessage("Email verified successfully!"));
+    }
+
+    // ──────────────────────────── Resend OTP ────────────────────────────
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<?> resendOtp(@Valid @RequestBody ResendOtpRequest request,
+                                       HttpServletRequest httpRequest) {
+        OtpType otpType;
+        try {
+            otpType = OtpType.valueOf(request.getType().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(new ResponseMessage("Invalid OTP type. Use EMAIL_VERIFICATION or PASSWORD_RESET."));
+        }
+
+        User user = userService.findByEmail(request.getEmail()).orElse(null);
+
+        // Don't reveal if user exists for PASSWORD_RESET
+        if (user == null) {
+            if (otpType == OtpType.PASSWORD_RESET) {
+                return ResponseEntity.ok(new ResponseMessage("If an account exists with this email, we've sent a new OTP."));
+            }
+            return ResponseEntity.badRequest().body(new ResponseMessage("User not found."));
+        }
+
+        if (otpType == OtpType.EMAIL_VERIFICATION) {
+            if (Boolean.TRUE.equals(user.getEmailVerified())) {
+                return ResponseEntity.ok(new ResponseMessage("Email is already verified."));
+            }
+            otpService.sendVerificationOtp(user, httpRequest);
+        } else {
+            // Only LOCAL users can reset password
+            if (user.getProvider() != null && user.getProvider() != AuthProvider.LOCAL) {
+                return ResponseEntity.ok(new ResponseMessage("If an account exists with this email, we've sent a new OTP."));
+            }
+            otpService.sendPasswordResetOtp(user, httpRequest);
+        }
+
+        return ResponseEntity.ok(new ResponseMessage("OTP sent successfully. Please check your email."));
+    }
+
+    // ──────────────────────────── Helpers ────────────────────────────
 
     /**
      * Creates Authentication object from User entity

@@ -27,7 +27,7 @@ class JwtUtilsTest {
         String testSecret = Base64.getEncoder().encodeToString(
             "MySecretKeyForJWTTestingPurpose12345678901234567890".getBytes()
         );
-        int testExpirationTime = 3600000;
+        int testExpirationTime = 3600000; // 1 hour in milliseconds
 
         ReflectionTestUtils.setField(jwtUtils, "jwtSecret", testSecret);
         ReflectionTestUtils.setField(jwtUtils, "jwtExpirationTimeInMs", testExpirationTime);
@@ -41,6 +41,8 @@ class JwtUtilsTest {
         
         User user = new User();
         user.setId(1);
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail("test@example.com");
         user.setPassword("encodedPassword");
         user.setRole(role);
@@ -60,11 +62,13 @@ class JwtUtilsTest {
     void testGetUsernameFromJwtToken_ReturnsCorrectEmail() {
         String email = "test@example.com";
         Role role = new Role();
-        role.setId(1);
+        role.setId(2);
         role.setName("ROLE_USER");
         
         User user = new User();
-        user.setId(1);
+        user.setId(2);
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail(email);
         user.setPassword("encodedPassword");
         user.setRole(role);
@@ -82,11 +86,13 @@ class JwtUtilsTest {
     @Test
     void testValidateJwt_WithValidToken_ReturnsTrue() {
         Role role = new Role();
-        role.setId(1);
+        role.setId(3);
         role.setName("ROLE_USER");
         
         User user = new User();
-        user.setId(1);
+        user.setId(3);
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail("test@example.com");
         user.setPassword("encodedPassword");
         user.setRole(role);

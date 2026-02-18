@@ -38,7 +38,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Stri
      */
     @Query("SELECT rt FROM RefreshToken rt WHERE rt.user.id = :userId " +
            "AND rt.revokedAt IS NULL AND rt.expiresAt > :now")
-    List<RefreshToken> findActiveTokensByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
+       List<RefreshToken> findActiveTokensByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
 
     /**
      * Find all tokens in a family
@@ -52,7 +52,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Stri
      */
     @Query("SELECT COUNT(rt) FROM RefreshToken rt WHERE rt.user.id = :userId " +
            "AND rt.revokedAt IS NULL AND rt.expiresAt > :now")
-    long countActiveSessionsByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
+       long countActiveSessionsByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
 
     /**
      * Find oldest active token for a user
@@ -61,7 +61,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Stri
     @Query("SELECT rt FROM RefreshToken rt WHERE rt.user.id = :userId " +
            "AND rt.revokedAt IS NULL AND rt.expiresAt > :now " +
            "ORDER BY rt.issuedAt ASC")
-    List<RefreshToken> findOldestActiveTokenByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
+       List<RefreshToken> findOldestActiveTokenByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
 
     /**
      * Revoke all tokens in a family
@@ -77,7 +77,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Stri
      */
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.revokedAt = :revokedAt, rt.revocationReason = :reason WHERE rt.user.id = :userId AND rt.revokedAt IS NULL")
-    int revokeAllUserTokens(@Param("userId") Integer userId, @Param("revokedAt") Instant revokedAt, @Param("reason") RevocationReason reason);
+       int revokeAllUserTokens(@Param("userId") Integer userId, @Param("revokedAt") Instant revokedAt, @Param("reason") RevocationReason reason);
 
     /**
      * Delete expired tokens older than specified date

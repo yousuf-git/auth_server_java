@@ -49,7 +49,12 @@ public class AuthResponse {
     private Long expiresIn;
 
     /**
-     * Constructor without expiresIn (will be set to default)
+     * Whether the user's email has been verified
+     */
+    private Boolean emailVerified;
+
+    /**
+     * Constructor without emailVerified (backward compatible)
      */
     public AuthResponse(String accessToken, Integer userId, String email, String role, Long expiresIn) {
         this.accessToken = accessToken;
@@ -58,5 +63,19 @@ public class AuthResponse {
         this.email = email;
         this.role = role;
         this.expiresIn = expiresIn;
+        this.emailVerified = null;
+    }
+
+    /**
+     * Full constructor with emailVerified
+     */
+    public AuthResponse(String accessToken, Integer userId, String email, String role, Long expiresIn, Boolean emailVerified) {
+        this.accessToken = accessToken;
+        this.tokenType = "Bearer";
+        this.userId = userId;
+        this.email = email;
+        this.role = role;
+        this.expiresIn = expiresIn;
+        this.emailVerified = emailVerified;
     }
 }

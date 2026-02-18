@@ -31,6 +31,10 @@ public class UserService {
         return userRepo.existsByEmail(email);
     }
 
+    public Boolean existsByCnic(String cnic) {
+        return userRepo.existsByCnic(cnic);
+    }
+
     public List<User> findAll() {
         return userRepo.findAll();
     }

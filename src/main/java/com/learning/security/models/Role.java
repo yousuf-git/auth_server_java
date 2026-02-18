@@ -38,6 +38,7 @@ public class Role implements java.io.Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "role_id", updatable = false, nullable = false)
     private Integer id;
 
     // Role name can be any string value
@@ -51,13 +52,13 @@ public class Role implements java.io.Serializable {
     private String description;
 
     @CreationTimestamp
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private Timestamp createdAt;
 
     @NotNull
-    @Column(columnDefinition = "boolean default true")
+    @Column(name = "is_active", columnDefinition = "boolean default false")
     @Builder.Default
-    private Boolean isActive = true;
+    private Boolean isActive = false;
 
     @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(name = "role_permission",

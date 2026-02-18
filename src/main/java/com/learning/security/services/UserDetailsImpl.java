@@ -97,7 +97,7 @@ public class UserDetailsImpl implements UserDetails, OAuth2User {
 
     return new UserDetailsImpl(
         user.getId(), 
-        user.getEmail(), 
+        user.getEmail(),  // Using email as username for authentication
         user.getEmail(),
         user.getPassword(),
         true,

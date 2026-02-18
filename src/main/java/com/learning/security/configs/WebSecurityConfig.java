@@ -194,6 +194,7 @@ public class WebSecurityConfig {
                 auth.requestMatchers("/auth/**").permitAll()
                     .requestMatchers("/oauth2/**").permitAll()
                     .requestMatchers("/login/**").permitAll()
+                    .requestMatchers("/api/public-key/**").permitAll()  // Allow public key endpoint for external systems
                     .requestMatchers("/test/all/**").permitAll()
                     .requestMatchers("/greet/**").permitAll()
                     .requestMatchers("/actuator/**").permitAll()

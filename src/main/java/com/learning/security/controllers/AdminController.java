@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
 @Validated
 public class AdminController {
 
@@ -79,9 +79,17 @@ public class AdminController {
         }
 
         User user = new User();
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setPhone(request.getPhone());
+        user.setCnic(request.getCnic());
+        user.setCountry(request.getCountry());
+        user.setCity(request.getCity());
+        user.setProvince(request.getProvince());
+        user.setArea(request.getArea());
+        user.setAddress(request.getAddress());
         user.setIsLocked(request.getIsLocked() != null ? request.getIsLocked() : false);
 
         if (request.getRoleId() != null) {
@@ -110,6 +118,38 @@ public class AdminController {
 
                     if (request.getPhone() != null) {
                         user.setPhone(request.getPhone());
+                    }
+
+                    if (request.getFirstName() != null) {
+                        user.setFirstName(request.getFirstName());
+                    }
+
+                    if (request.getLastName() != null) {
+                        user.setLastName(request.getLastName());
+                    }
+
+                    if (request.getCnic() != null) {
+                        user.setCnic(request.getCnic());
+                    }
+
+                    if (request.getCountry() != null) {
+                        user.setCountry(request.getCountry());
+                    }
+
+                    if (request.getCity() != null) {
+                        user.setCity(request.getCity());
+                    }
+
+                    if (request.getProvince() != null) {
+                        user.setProvince(request.getProvince());
+                    }
+
+                    if (request.getArea() != null) {
+                        user.setArea(request.getArea());
+                    }
+
+                    if (request.getAddress() != null) {
+                        user.setAddress(request.getAddress());
                     }
 
                     if (request.getIsLocked() != null) {
@@ -152,7 +192,7 @@ public class AdminController {
     @PostMapping("/roles")
     public ResponseEntity<?> createRole(@Valid @RequestBody CreateRoleRequest request) {
         if (roleService.existsByName(request.getName())) {
-            return ResponseEntity.badRequest().body(new ResponseMessage("Role already exists"));
+            return ResponseEntity.badRequest().body(new ResponseMessage("Role with this name already exists"));
         }
 
         Role role = Role.builder()
@@ -195,6 +235,10 @@ public class AdminController {
                             permissionService.findById(permId).ifPresent(permissions::add);
                         }
                         role.setPermissions(permissions);
+                    }
+
+                    if (request.getIsActive() != null) {
+                        role.setIsActive(request.getIsActive());
                     }
 
                     Role savedRole = roleService.save(role);

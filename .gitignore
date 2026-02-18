@@ -89,4 +89,12 @@ logs/
 # Temporary files
 #*.tmp
 #*.temp
+
+# ===============================================
+# RSA Private Keys - SECURITY CRITICAL
+# ===============================================
+# NEVER commit private keys to version control
+src/main/resources/keys/private_key*.pem
+# Optional: Keep public key out of Git too
+# src/main/resources/keys/public_key.pem
 ```

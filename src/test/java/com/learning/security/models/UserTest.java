@@ -24,6 +24,8 @@ class UserTest {
     @Test
     void testCreateValidUser() {
         User user = new User();
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail("test@example.com");
         user.setPassword("password123");
         
@@ -42,6 +44,8 @@ class UserTest {
     @Test
     void testUserWithoutEmail_ValidationFails() {
         User user = new User();
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setPassword("password123");
 
         Set<ConstraintViolation<User>> violations = validator.validate(user);
@@ -56,6 +60,8 @@ class UserTest {
         role.setName("ROLE_ADMIN");
 
         User user = new User();
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail("test@example.com");
         user.setPassword("password123");
         user.setRole(role);

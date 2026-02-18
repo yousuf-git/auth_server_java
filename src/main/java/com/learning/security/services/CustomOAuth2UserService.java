@@ -107,11 +107,20 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         user.setImageUrl(oAuth2UserInfo.getImageUrl());
         user.setEmailVerified(true);
         user.setPassword(""); // No password for OAuth2 users
+
+        // Extract firstName and lastName from OAuth2 profile name
+        String fullName = oAuth2UserInfo.getName();
+        if (fullName != null && !fullName.isBlank()) {
+            String[] parts = fullName.trim().split("\\s+", 2);
+            user.setFirstName(parts[0]);
+            user.setLastName(parts.length > 1 ? parts[1] : "");
+        } else {
+            user.setFirstName("OAuth");
+            user.setLastName("User");
+        }
         
-        // Assign default role
-        Role userRole = roleRepo.findByName("ROLE_CUSTOMER")
-            .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-        user.setRole(userRole);
+        // Assign default role (flexible lookup by name from DB)
+        roleRepo.findByName("ROLE_CUSTOMER").ifPresent(user::setRole);
         
         return userRepo.save(user);
     }

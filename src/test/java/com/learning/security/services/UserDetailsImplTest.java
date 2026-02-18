@@ -237,7 +237,7 @@ class UserDetailsImplTest {
     @Test
     void testRoleConversionToGrantedAuthority() {
         // Given
-        Role role = Role.builder().id(1).name("ROLE_ADMIN").build();
+        Role role = Role.builder().id(2).name("ROLE_ADMIN").build();
         User user = createUser("test@example.com", role);
 
         // When
@@ -257,6 +257,8 @@ class UserDetailsImplTest {
     private User createUser(String email, Role role) {
         User user = new User();
         user.setId(1);
+        user.setFirstName("Test");
+        user.setLastName("User");
         user.setEmail(email);
         user.setPassword("encodedPassword");
         user.setRole(role);
