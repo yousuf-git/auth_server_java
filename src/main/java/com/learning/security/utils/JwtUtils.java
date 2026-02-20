@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 
 import com.learning.security.services.UserDetailsImpl;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
@@ -185,9 +186,27 @@ public class JwtUtils {
      * @return the generated JWT token as a String
      */
     public String generateTokenByAuth(Authentication auth) {
-        
+
         // Only valid authentication object should reach here
         UserDetailsImpl userDetails = (UserDetailsImpl) auth.getPrincipal();
+
+        // Extract role (e.g., "ROLE_CUSTOMER")
+        String role = userDetails.getAuthorities().stream()
+                .map(a -> a.getAuthority())
+                .findFirst()
+                .orElse("");
+        
+        // Build scopes array from permissions (if any) - space-separated string
+        // This retrieves permissions from the user's role
+        String scopes = "";
+        if (userDetails.getUser() != null && 
+            userDetails.getUser().getRole() != null && 
+            userDetails.getUser().getRole().getPermissions() != null) {
+            scopes = userDetails.getUser().getRole().getPermissions().stream()
+                    .map(p -> p.getName())
+                    .reduce((a, b) -> a + " " + b)
+                    .orElse("");
+        }
 
         try {
             // https://github.com/jwtk/jjwt?tab=readme-ov-file#creating-a-jwt
@@ -196,6 +215,9 @@ public class JwtUtils {
                     .and()
                     .issuer("M. Yousuf")
                     .subject(userDetails.getUsername())
+                    .claim("role", role)
+                    .claim("scopes", scopes)
+                    .claim("user_id", userDetails.getId())
                     .issuedAt(new Date())
                     .expiration(new Date(new Date().getTime() + jwtExpirationTimeInMs));
             
@@ -363,5 +385,30 @@ public class JwtUtils {
         //             .parseSignedClaims(jwtToken)
         //             .getPayload().getSubject();
                     // .getHeader().get("Subject");
+    }
+
+    /**
+     * Extract all claims from a JWT token for introspection.
+     * Returns null if the token is invalid or expired.
+     */
+    public Claims getClaimsFromToken(String jwtToken) {
+        try {
+            if ("RS256".equals(jwtSigningAlgorithm)) {
+                return Jwts.parser()
+                        .verifyWith(loadPublicKey())
+                        .build()
+                        .parseSignedClaims(jwtToken)
+                        .getPayload();
+            } else {
+                return Jwts.parser()
+                        .verifyWith(getSymmetricKey())
+                        .build()
+                        .parseSignedClaims(jwtToken)
+                        .getPayload();
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to extract claims from token: {}", e.getMessage());
+            return null;
+        }
     }
 }

@@ -22,6 +22,7 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.sql.Timestamp;
 import java.util.HashSet;
@@ -60,6 +61,7 @@ public class Role implements java.io.Serializable {
     @Builder.Default
     private Boolean isActive = false;
 
+    @JsonIgnore
     @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(name = "role_permission",
             joinColumns = @JoinColumn(name = "role_id"),
@@ -72,3 +74,28 @@ public class Role implements java.io.Serializable {
     }
 
 }
+
+/*
+Role {
+    id: 1,
+    name: "ROLE_SUPER_ADMIN",
+    description: "Admin role with all permissions",
+    createdAt: 2024-06-01T12:00:00Z,
+    isActive: true,
+    permissions: [
+        Permission {
+            id: 1,
+            name: "READ_PRIVILEGES",
+            description: "Permission to read data",
+            createdAt: 2024-06-01T12:00:00Z,
+            isActive: true
+        },
+        Permission {
+            id: 2,
+            name: "WRITE_PRIVILEGES",
+            description: "Permission to write data",
+            createdAt: 2024-06-01T12:00:00Z,
+            isActive: true
+        }
+    ]
+ */

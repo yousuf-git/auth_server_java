@@ -148,3 +148,26 @@ public class User implements java.io.Serializable {
     private User unlockedBy;
 
 }
+
+/*
+Example User JSON Representation:
+User {
+    id: 1,
+    firstName: "John",
+    lastName: "Doe",
+    cnic: "12345-6789012-3",
+    country: "USA",
+    city: "New York",
+    province: "NY",
+    area: "Manhattan",
+    address: "123 Main St",
+    email: "user@gmail.com",
+    password: "hashed_password",
+    phone: "+1234567890",
+    provider: "GOOGLE",
+    providerId: "google-oauth2|1234567890",
+    imageUrl: "http://example.com/image.jpg",
+    emailVerified: true,
+}
+
+ */

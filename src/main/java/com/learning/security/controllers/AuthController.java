@@ -44,6 +44,15 @@ import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+// @CrossOrigin(originPatterns = "*", maxAge = 3600, allowCredentials = "true") // Allow credentials for cookies, maxAge is in seconds; 3600s = 1 hr
+/*
+ * The HTTP Access-Control-Max-Age response header indicates how long the
+ * results of a preflight request (that is, the information contained in the
+ * Access-Control-Allow-Methods and Access-Control-Allow-Headers headers) can be
+ * cached.
+ */
+// https://docs.spring.io/spring-framework/docs/4.2.x/spring-framework-reference/html/cors.html
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -117,6 +126,14 @@ public class AuthController {
                         HttpStatus.BAD_REQUEST);
             }
             user.setRole(role);
+        } else {
+            // Default role assignment
+            Role defaultRole = roleService.findByName("ROLE_CUSTOMER").orElse(null);
+            if (defaultRole == null) {
+                return new ResponseEntity<>(new ResponseMessage("Default role 'ROLE_CUSTOMER' not found."),
+                        HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+            user.setRole(defaultRole);
         }
 
         User savedUser = userService.save(user);
@@ -177,12 +194,22 @@ public class AuthController {
             cookieUtils.setRefreshTokenCookie(httpResponse, tokenPair.getRawToken());
 
             String role = userDetails.getRoles().isEmpty() ? "" : userDetails.getRoles().get(0).getAuthority();
+            
+            // Extract permissions as space-separated string
+            String scopes = "";
+            if (user.getRole() != null && user.getRole().getPermissions() != null) {
+                scopes = user.getRole().getPermissions().stream()
+                        .map(p -> p.getName())
+                        .reduce((a, b) -> a + " " + b)
+                        .orElse("");
+            }
 
             AuthResponse authResponse = new AuthResponse(
                 accessToken,
                 userDetails.getId(),
                 userDetails.getEmail(),
                 role,
+                scopes,
                 jwtUtils.getJwtExpirationMs(),
                 user.getEmailVerified()
             );
@@ -220,12 +247,22 @@ public class AuthController {
             String accessToken = jwtUtils.generateTokenByAuth(authentication);
 
             String role = user.getRole() != null ? user.getRole().getName() : "";
+            
+            // Extract permissions as space-separated string
+            String scopes = "";
+            if (user.getRole() != null && user.getRole().getPermissions() != null) {
+                scopes = user.getRole().getPermissions().stream()
+                        .map(p -> p.getName())
+                        .reduce((a, b) -> a + " " + b)
+                        .orElse("");
+            }
 
             AuthResponse authResponse = new AuthResponse(
                 accessToken,
                 user.getId(),
                 user.getEmail(),
                 role,
+                scopes,
                 jwtUtils.getJwtExpirationMs(),
                 user.getEmailVerified()
             );
@@ -319,12 +356,22 @@ public class AuthController {
             cookieUtils.setRefreshTokenCookie(httpResponse, tokenPair.getRawToken());
 
             String role = user.getRole() != null ? user.getRole().getName() : "";
+            
+            // Extract permissions as space-separated string
+            String scopes = "";
+            if (user.getRole() != null && user.getRole().getPermissions() != null) {
+                scopes = user.getRole().getPermissions().stream()
+                        .map(p -> p.getName())
+                        .reduce((a, b) -> a + " " + b)
+                        .orElse("");
+            }
 
             AuthResponse authResponse = new AuthResponse(
                 accessToken,
                 user.getId(),
                 user.getEmail(),
                 role,
+                scopes,
                 jwtUtils.getJwtExpirationMs(),
                 true
             );

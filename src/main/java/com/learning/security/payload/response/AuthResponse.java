@@ -44,6 +44,11 @@ public class AuthResponse {
     private String role;
     
     /**
+     * User permissions/scopes (space-separated)
+     */
+    private String scopes;
+    
+    /**
      * Access token expiration time in milliseconds
      */
     private Long expiresIn;
@@ -62,6 +67,7 @@ public class AuthResponse {
         this.userId = userId;
         this.email = email;
         this.role = role;
+        this.scopes = "";
         this.expiresIn = expiresIn;
         this.emailVerified = null;
     }
@@ -75,6 +81,21 @@ public class AuthResponse {
         this.userId = userId;
         this.email = email;
         this.role = role;
+        this.scopes = "";
+        this.expiresIn = expiresIn;
+        this.emailVerified = emailVerified;
+    }
+    
+    /**
+     * Full constructor with emailVerified and scopes
+     */
+    public AuthResponse(String accessToken, Integer userId, String email, String role, String scopes, Long expiresIn, Boolean emailVerified) {
+        this.accessToken = accessToken;
+        this.tokenType = "Bearer";
+        this.userId = userId;
+        this.email = email;
+        this.role = role;
+        this.scopes = scopes;
         this.expiresIn = expiresIn;
         this.emailVerified = emailVerified;
     }
