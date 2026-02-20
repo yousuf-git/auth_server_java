@@ -9,6 +9,7 @@ import com.learning.security.services.RefreshTokenService;
 import com.learning.security.services.UserDetailsImpl;
 import com.learning.security.utils.CookieUtils;
 import com.learning.security.utils.JwtUtils;
+import com.learning.security.utils.OAuth2CookieUtils;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -52,6 +53,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     @Autowired
     private CookieUtils cookieUtils;
 
+    @Autowired
+    private OAuth2CookieUtils oauth2CookieUtils;
+
     @Value("#{'${yousuf.app.oauth2.authorized-redirect-uris}'.split(',')}")
     private List<String> authorizedRedirectUris;
 
@@ -79,25 +83,48 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             TokenPair tokenPair = refreshTokenService.createRefreshToken(user, request, oauthClientId);
             cookieUtils.setRefreshTokenCookie(response, tokenPair.getRawToken());
 
-            AuthResponse authResponse = new AuthResponse(
-                    accessToken,
-                    userDetails.getId(),
-                    userDetails.getEmail(),
-                    role,
-                    jwtUtils.getJwtExpirationMs()
-            );
-
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setStatus(HttpServletResponse.SC_OK);
-            response.getWriter().write(objectMapper.writeValueAsString(authResponse));
-            response.getWriter().flush();
+            // Build redirect URL with token for frontend
+            String targetUrl = determineRedirectUrl(request, accessToken, user, role);
+            
+            // Clear OAuth2 cookies after use
+            oauth2CookieUtils.clearOAuth2Cookies(request, response);
+            
+            // Redirect to frontend
+            getRedirectStrategy().sendRedirect(request, response, targetUrl);
 
             logger.info("OAuth2 authentication successful for user: {}", userDetails.getEmail());
 
         } catch (Exception e) {
             logger.error("Error during OAuth2 authentication success handling", e);
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            response.getWriter().write("{\"error\": \"Authentication successful but token generation failed\"}");
+            
+            // Try to get client's error URI from cookie
+            String errorUrl = oauth2CookieUtils.getErrorUriCookie(request)
+                    .orElse(authorizedRedirectUris.isEmpty() ? "/" : authorizedRedirectUris.get(0));
+            errorUrl = errorUrl + "?error=" + e.getMessage();
+            
+            oauth2CookieUtils.clearOAuth2Cookies(request, response);
+            getRedirectStrategy().sendRedirect(request, response, errorUrl);
         }
+    }
+
+    /**
+     * Build redirect URL with token and user info for frontend
+     * Uses client-provided redirect_uri from cookie, falls back to configured URI
+     */
+    private String determineRedirectUrl(HttpServletRequest request, String accessToken, User user, String role) {
+        // Try to get client's redirect URI from cookie
+        String targetUrl = oauth2CookieUtils.getRedirectUriCookie(request)
+                .orElse(authorizedRedirectUris.isEmpty() ? "http://localhost:3000" : authorizedRedirectUris.get(0));
+        
+        logger.info("Redirecting OAuth2 user to: {}", targetUrl);
+        
+        return targetUrl + "?" +
+                "accessToken=" + accessToken +
+                "&tokenType=Bearer" +
+                "&userId=" + user.getId() +
+                "&email=" + user.getEmail() +
+                "&role=" + role +
+                "&expiresIn=" + jwtUtils.getJwtExpirationMs() +
+                "&emailVerified=" + user.getEmailVerified();
     }
 }

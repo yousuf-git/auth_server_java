@@ -29,7 +29,26 @@ import org.springframework.validation.FieldError;
 import java.util.HashMap;
 import java.util.Map;
 
-
+/**
+ * <h2>GlobalExceptionHandler</h2>
+ * <p> 
+* <b>Purpose:</b><br>
+ * This class acts as a centralized exception handler for the entire application. That's why Annotated with @RestControllerAdvice <br>
+ * </p>
+ * <ul>
+ *   <li>Handles exceptions thrown by controllers and other components globally.</li>
+ *   <li>Provides custom responses for validation and other errors.</li>
+ * </ul>
+ * <p><b>When is it used?</b></p>
+ * <ul>
+ *   <li>Automatically invoked by Spring when an exception is thrown in any controller.</li>
+ * </ul>
+ * <p><b>What happens after?</b></p>
+ * <ul>
+ *   <li>Returns a structured error response to the client, typically as JSON.</li>
+ *   <li>Prevents the application from returning default error pages.</li>
+ * </ul>
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {

@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -17,9 +18,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.learning.security.auth.AuthEntryPointJwt;
 import com.learning.security.auth.AuthTokenFilter;
+import com.learning.security.auth.CustomAuthorizationRequestResolver;
 import com.learning.security.auth.JwtAccessDeniedHandler;
 import com.learning.security.auth.OAuth2AuthenticationFailureHandler;
 import com.learning.security.auth.OAuth2AuthenticationSuccessHandler;
+import com.learning.security.auth.OAuth2RequestRepository;
 import com.learning.security.services.CustomOAuth2UserService;
 import com.learning.security.services.UserDetailsServiceImpl;
 
@@ -132,6 +135,10 @@ public class WebSecurityConfig {
     OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     @Autowired
     OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
+    @Autowired
+    ClientRegistrationRepository clientRegistrationRepository;
+    @Autowired
+    OAuth2RequestRepository oAuth2RequestRepository;
 
     @Value("${yousuf.app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}")
     private String[] allowedOrigins;
@@ -205,7 +212,14 @@ public class WebSecurityConfig {
             })
             .oauth2Login(oauth2 -> oauth2
                 .authorizationEndpoint(authorization -> authorization
-                    .baseUri("/oauth2/authorize"))
+                    .baseUri("/oauth2/authorize")
+                    .authorizationRequestRepository(oAuth2RequestRepository)
+                    .authorizationRequestResolver(
+                        new CustomAuthorizationRequestResolver(
+                            clientRegistrationRepository,
+                            "/oauth2/authorize"
+                        )
+                    ))
                 .redirectionEndpoint(redirection -> redirection
                     .baseUri("/login/oauth2/code/*"))
                 .userInfoEndpoint(userInfo -> userInfo
