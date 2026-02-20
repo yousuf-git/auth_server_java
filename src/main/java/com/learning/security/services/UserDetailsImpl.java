@@ -65,6 +65,13 @@ public class UserDetailsImpl implements UserDetails, OAuth2User {
      * We have SimpleGrantedAuthority class that implements GrantedAuthority interface.
      */
     private List<GrantedAuthority> roles;
+    
+    /** 
+     * <h3>user</h3>
+     * Reference to the original User entity to access role and permissions.
+     * This is needed for JWT token generation to include permissions.
+     */
+    private User user;
 
 
     /**
@@ -103,7 +110,9 @@ public class UserDetailsImpl implements UserDetails, OAuth2User {
         true,
         user.getIsLocked() != null ? user.getIsLocked() : false,
         null,
-        authorities);
+        authorities,
+        user  // Pass the user reference
+    );
     }
 
     /**
